@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOFA 搜索工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #eff6ff;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --radius: 8px;
+            --radius-lg: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        /* ==================== 顶部栏 ==================== */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .topbar-accent {
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), #6366f1);
+        }
+
+        .topbar-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--text);
+            letter-spacing: -0.3px;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .topbar-brand:hover {
+            opacity: 0.8;
+        }
+
+        .topbar-brand .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .topbar-author {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+            padding-left: 10px;
+            border-left: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+            white-space: nowrap;
+            transition: color 0.15s;
+        }
+        .topbar-author:hover {
+            color: var(--primary);
+        }
+        .topbar-author svg {
+            flex-shrink: 0;
+        }
+
+        .about-content {
+            text-align: center;
+            padding: 8px 0 16px;
+        }
+        .about-logo {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 14px;
+        }
+        .about-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .about-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .about-version {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        .about-info {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 2;
+        }
+        .about-info a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        .about-info a:hover {
+            text-decoration: underline;
+        }
+        .about-copyright {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-light);
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        /* ==================== 按钮系统 ==================== */
+        .btn {
+            padding: 7px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card);
+            color: var(--text);
+            white-space: nowrap;
+            line-height: 1.4;
+        }
+
+        .btn:hover {
+            background: var(--bg);
+            border-color: #cbd5e1;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-secondary {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+
+        .btn-ghost {
+            border-color: transparent;
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .btn-sm, .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .btn-icon {
+            padding: 6px;
+            min-width: 32px;
+            justify-content: center;
+        }
+
+        /* ==================== 主容器 ==================== */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 16px 20px 40px;
+        }
+
+        /* ==================== 搜索区域 ==================== */
+        .search-area {
+            margin-bottom: 12px;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 15px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', 'Menlo', monospace;
+            background: var(--card);
+            color: var(--text);
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .search-clear-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--text-muted);
+            transition: color 0.15s;
+            display: none;
+            z-index: 1;
+        }
+
+        .search-clear-btn.show {
+            display: block;
+        }
+
+        .search-clear-btn:hover {
+            color: var(--text);
+        }
+
+        .search-btn {
+            padding: 12px 28px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: var(--radius);
+            flex-shrink: 0;
+        }
+
+        /* 搜索建议下拉 */
+        .suggestions {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            z-index: 200;
+            display: none;
+        }
+
+        .suggestions.show {
+            display: block;
+        }
+
+        .suggestion-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-light);
+            transition: background 0.15s;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover {
+            background: var(--primary-light);
+        }
+
+        .suggestion-query {
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        .suggestion-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .suggestion-delete {
+            padding: 3px 6px;
+            font-size: 11px;
+            background: var(--error);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .suggestion-item:hover .suggestion-delete {
+            opacity: 1;
+        }
+
+        /* ==================== 工具栏 ==================== */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-sep {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+            margin: 0 4px;
+            flex-shrink: 0;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .toolbar-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        /* 下拉选择器 */
+        .select-sm {
+            padding: 5px 28px 5px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12px;
+            background: var(--card);
+            color: var(--text);
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            transition: border-color 0.15s;
+        }
+
+        .select-sm:hover {
+            border-color: #cbd5e1;
+        }
+
+        .select-sm:focus {
+            border-color: var(--primary);
+        }
+
+        /* ==================== 高级选项 ==================== */
+        .advanced-options {
+            display: none;
+            padding: 12px 0;
+            border-top: 1px solid var(--border-light);
+            margin-top: 8px;
+        }
+
+        .advanced-options.show {
+            display: block;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .config-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .config-item label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .config-item select,
+        .config-item input {
+            padding: 7px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.15s;
+            background: var(--card);
+            color: var(--text);
+        }
+
+        .config-item select:focus,
+        .config-item input:focus {
+            border-color: var(--primary);
+        }
+
+        /* 缓存设置行 */
+        .cache-config {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 6px;
+        }
+
+        .cache-time-input {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .cache-time-input input {
+            width: 52px;
+            padding: 5px 6px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .cache-time-input select {
+            padding: 5px 6px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        /* 开关 */
+        .toggle-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: relative;
+            width: 34px;
+            height: 18px;
+            background: var(--border);
+            border-radius: 9px;
+            transition: all 0.2s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            left: 2px;
+            top: 2px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.2s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: var(--success);
+        }
+
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(16px);
+        }
+
+        .toggle-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* ==================== 字段选择器 ==================== */
+        .fields-dropdown-wrapper {
+            position: relative;
+        }
+
+        .fields-dropdown-btn {
+            padding: 5px 10px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+            max-width: 200px;
+        }
+
+        .fields-dropdown-btn:hover {
+            border-color: #cbd5e1;
+        }
+
+        .fields-dropdown-btn .arrow {
+            transition: transform 0.2s;
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+
+        .fields-dropdown-btn.open .arrow {
+            transform: rotate(180deg);
+        }
+
+        .fields-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            z-index: 200;
+            display: none;
+            min-width: 280px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .fields-dropdown-menu.show {
+            display: block;
+        }
+
+        .field-option {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.1s;
+        }
+
+        .field-option:hover {
+            background: var(--primary-light);
+        }
+
+        .field-option.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .field-option.disabled:hover {
+            background: transparent;
+        }
+
+        .field-option .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .field-option.selected .checkbox {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .field-option.selected .checkbox::after {
+            content: '\2713';
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .fields-selected-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .field-tag-small {
+            padding: 2px 8px;
+            background: var(--primary-light);
+            color: var(--primary);
+            border-radius: 4px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .field-tag-small .remove-field {
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0.6;
+            transition: opacity 0.15s;
+        }
+
+        .field-tag-small .remove-field:hover {
+            opacity: 1;
+        }
+
+        /* ==================== 快速筛选 ==================== */
+        .quick-filters {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            margin-bottom: 12px;
+        }
+
+        .filter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .filter-header label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .filter-toggle-btn {
+            font-size: 12px;
+            color: var(--primary);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 2px 6px;
+        }
+
+        .filter-toggle-btn:hover {
+            text-decoration: underline;
+        }
+
+        .filter-categories {
+            display: none;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .filter-categories.show {
+            display: block;
+        }
+
+        .filter-category {
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .filter-category:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .filter-category-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .filter-tag {
+            padding: 4px 10px;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+        }
+
+        .filter-tag:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .filter-tag.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .filter-tag.disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .filter-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px;
+        }
+
+        .filter-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .filter-input-group label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .filter-input-group input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 12px;
+            background: var(--bg);
+            color: var(--text);
+            box-sizing: border-box;
+            transition: border-color 0.15s;
+        }
+
+        .filter-input-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .filter-input-group input:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* 操作符选择器样式 */
+        .filter-input-group.has-operator {
+            /* 带操作符的输入组 */
+        }
+
+        .filter-input-wrapper {
+            display: flex;
+            gap: 4px;
+        }
+
+        .filter-operator {
+            width: 52px;
+            min-width: 52px;
+            padding: 6px 4px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: 12px;
+            background: var(--bg-secondary, #f5f5f5);
+            color: var(--text);
+            cursor: pointer;
+            transition: border-color 0.15s;
+            text-align: center;
+            appearance: auto;
+        }
+
+        .filter-operator:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .filter-operator:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .filter-input-wrapper input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* ==================== 下载进度展示 ==================== */
+        .download-progress {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 320px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .download-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--primary-light);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        .download-progress-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--primary);
+        }
+
+        .download-progress-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 0 4px;
+            line-height: 1;
+        }
+
+        .download-progress-close:hover {
+            color: var(--text);
+        }
+
+        .download-progress-body {
+            padding: 16px;
+        }
+
+        .download-progress-status {
+            font-size: 13px;
+            color: var(--text);
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .download-progress-bar-container {
+            height: 8px;
+            background: var(--bg);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .download-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #6366f1);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .download-progress-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .lock-icon {
+            font-size: 10px;
+            opacity: 0.5;
+        }
+
+        .active-filters {
+            display: none;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .active-filter-tag {
+            padding: 3px 8px;
+            background: var(--primary);
+            color: white;
+            border-radius: 5px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .active-filter-tag .remove-filter {
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            opacity: 0.8;
+        }
+
+        .active-filter-tag .remove-filter:hover {
+            opacity: 1;
+        }
+
+        .active-filter-clear {
+            background: var(--danger);
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .active-filter-clear:hover {
+            opacity: 0.85;
+        }
+
+        /* ==================== 结果区域 ==================== */
+        .results-section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        /* 结果信息栏 */
+        .results-info {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-light);
+            background: var(--bg);
+            font-size: 13px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .results-info.show {
+            display: flex;
+        }
+
+        .results-info-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .results-info-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .results-stat {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .results-stat .label {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .results-stat .value {
+            font-weight: 400;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+        }
+
+        .results-stat .value.accent {
+            color: var(--primary);
+        }
+
+        .copy-col-btn {
+            display: inline;
+            margin-left: auto;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.45;
+            transition: opacity 0.15s;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .copy-col-btn:hover {
+            opacity: 1;
+        }
+
+        /* 内联分页 */
+        .inline-pagination {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .page-btn-sm {
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.15s;
+            color: var(--text);
+        }
+
+        .page-btn-sm:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .page-btn-sm:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .page-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 0 4px;
+            white-space: nowrap;
+        }
+
+        /* 控制工具栏 */
+        .results-toolbar {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border-light);
+            flex-wrap: wrap;
+        }
+
+        .results-toolbar.show {
+            display: flex;
+        }
+
+        /* 数据表格 */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: var(--bg);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            border-bottom: 2px solid var(--border);
+            transition: background 0.15s;
+        }
+        th .th-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+        th .th-label {
+            flex-shrink: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        th:hover {
+            background: var(--border-light);
+            color: var(--text);
+        }
+
+        th .sort-icon {
+            margin-left: 4px;
+            opacity: 0.4;
+            font-size: 10px;
+        }
+
+        th .sort-icon.active {
+            opacity: 1;
+            color: var(--primary);
+        }
+
+        td {
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--border-light);
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+        }
+
+        tr:hover {
+            background: var(--primary-light);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* 链接样式 */
+        .link {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        /* 底部分页 */
+        .pagination {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            padding: 14px 16px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .pagination.show {
+            display: flex;
+        }
+
+        .page-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s;
+            color: var(--text);
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .page-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 0 8px;
+        }
+
+        /* ==================== 空状态 & 加载 ==================== */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 12px;
+            opacity: 0.3;
+            color: var(--text-secondary);
+        }
+
+        .empty-state h3 {
+            font-size: 16px;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .empty-state p {
+            font-size: 13px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 48px 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading p {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* ==================== 弹窗 ==================== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 28px;
+            width: 90%;
+            max-width: 480px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            transform: scale(0.95) translateY(10px);
+            transition: transform 0.2s;
+        }
+
+        .modal-overlay.show .modal {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        .modal-desc {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .modal-input-wrapper {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px 44px 12px 14px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .modal-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            color: var(--text-muted);
+            transition: color 0.15s;
+        }
+
+        .toggle-password:hover {
+            color: var(--text);
+        }
+
+        .toggle-password svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        /* ==================== 用户信息面板 ==================== */
+        .user-info-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 380px;
+            background: var(--card);
+            box-shadow: -8px 0 30px rgba(0, 0, 0, 0.1);
+            transform: translateX(100%);
+            transition: transform 0.25s;
+            z-index: 1001;
+            overflow-y: auto;
+        }
+
+        .user-info-panel.show {
+            transform: translateX(0);
+        }
+
+        .panel-header {
+            padding: 20px;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .panel-close {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .panel-close:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .panel-content {
+            padding: 20px;
+        }
+
+        .info-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .info-value.vip {
+            color: var(--warning);
+        }
+
+        .info-value.success {
+            color: var(--success);
+        }
+
+        /* ==================== Toast ==================== */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: var(--text);
+            color: white;
+            border-radius: var(--radius);
+            font-size: 13px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all 0.25s;
+            z-index: 2000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: var(--success);
+        }
+
+        .toast.error {
+            background: var(--error);
+        }
+
+        /* ==================== 徽章 ==================== */
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-vip {
+            background: linear-gradient(135deg, #f59e0b, #f97316);
+            color: white;
+        }
+
+        .badge-free {
+            background: var(--border);
+            color: var(--text-secondary);
+        }
+
+        /* ==================== 缓存标记 ==================== */
+        .cache-badge {
+            display: inline-block;
+            padding: 1px 5px;
+            background: var(--success);
+            color: white;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        .cache-badge.miss {
+            background: var(--text-muted);
+        }
+
+        /* ==================== Tooltip ==================== */
+        .tooltip-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .tooltip-icon {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: help;
+            transition: all 0.15s;
+            flex-shrink: 0;
+            margin-left: 3px;
+        }
+
+        .tooltip-icon:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tooltip-content {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: nowrap;
+            max-width: calc(100vw - 32px);
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s, visibility 0.15s;
+            z-index: 300;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .tooltip-content::after {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-bottom-color: #1e293b;
+        }
+
+        /* JS 动态调整溢出方向 */
+        .tooltip-content.tip-right {
+            left: auto;
+            right: 0;
+            transform: none;
+        }
+        .tooltip-content.tip-right::after {
+            left: auto;
+            right: 12px;
+            transform: none;
+        }
+        .tooltip-content.tip-left {
+            left: 0;
+            transform: none;
+        }
+        .tooltip-content.tip-left::after {
+            left: 12px;
+            transform: none;
+        }
+
+        .tooltip-wrapper:hover .tooltip-content {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* ==================== 响应式 ==================== */
+        @media (max-width: 768px) {
+            .main {
+                padding: 12px;
+            }
+
+            .topbar-inner {
+                padding: 0 12px;
+            }
+
+            .search-bar {
+                flex-direction: column;
+            }
+
+            .search-btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .toolbar {
+                gap: 4px;
+            }
+
+            .toolbar-sep {
+                display: none;
+            }
+
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .user-info-panel {
+                width: 100%;
+            }
+
+            .results-info {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .results-toolbar {
+                flex-wrap: wrap;
+            }
+
+            .filter-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部栏 -->
+    <div class="topbar">
+        <div class="topbar-accent"></div>
+        <div class="topbar-inner">
+            <a href="/" class="topbar-brand">
+                <span class="dot"></span>
+                FOFA 搜索
+            </a>
+            <div class="topbar-actions">
+                <button class="btn btn-ghost btn-sm" onclick="showUsageStats()" title="本月使用统计">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                    统计
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showUserInfo()">账户信息</button>
+                <button class="btn btn-ghost btn-sm" onclick="showApiKeyModal()">API 配置</button>
+                <button class="btn btn-ghost btn-sm" onclick="exportConfigToFile()" title="导出配置">配置导出</button>
+                <button class="btn btn-ghost btn-sm" onclick="importConfigFromFile()" title="导入配置">配置导入</button>
+                <span class="topbar-author" onclick="window.openUrl('https://github.com/Mr-xn')" title="GitHub" style="cursor: pointer;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    Mrxn
+                </span>
+                <span class="topbar-author" onclick="showAboutModal()" title="关于" style="cursor: pointer; border-left: none; padding-left: 0; margin-left: 0;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- 搜索区域 -->
+        <div class="search-area">
+            <div class="search-bar">
+                <div class="search-input-wrapper">
+                    <input type="text" class="search-input" id="searchInput"
+                           placeholder='title="login" 或 body="admin"'
+                           autocomplete="off">
+                    <button type="button" class="search-clear-btn" id="searchClearBtn" onclick="clearSearchInput()" title="清除">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                    <div class="suggestions" id="suggestions"></div>
+                </div>
+                <button class="btn btn-primary search-btn" onclick="doSearch()">搜索</button>
+            </div>
+
+            <!-- 工具栏：筛选 + 字段 + 配置 + 展开 -->
+            <div class="toolbar" style="margin-top: 8px;">
+                <!-- 快速筛选入口 -->
+                <div class="filter-header" style="margin: 0;">
+                    <button class="btn btn-sm" id="filterToggleBtn" onclick="toggleFilters()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+                        筛选
+                    </button>
+                </div>
+
+                <div class="toolbar-sep"></div>
+
+                <!-- 字段选择 -->
+                <div class="fields-dropdown-wrapper">
+                    <button class="fields-dropdown-btn" id="fieldsDropdownBtn" onclick="toggleFieldsDropdown()">
+                        <span id="fieldsDropdownText">字段</span>
+                        <span class="arrow">▼</span>
+                    </button>
+                    <div class="fields-dropdown-menu" id="fieldsDropdownMenu"></div>
+                </div>
+
+                <div class="toolbar-sep"></div>
+
+                <!-- 每页数量 -->
+                <div class="toolbar-group">
+                    <span class="toolbar-label">每页</span>
+                    <select id="pageSize" class="select-sm">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                    </select>
+                    <span class="tooltip-wrapper">
+                        <span class="tooltip-icon">?</span>
+                        <span class="tooltip-content">
+                            每页返回的数据条数。在免费额度内不扣F点，超出后按实际下载量扣费。数值越大翻页越少，但单次请求风险越高。
+                        </span>
+                    </span>
+                </div>
+
+                <div class="toolbar-sep"></div>
+
+                <!-- 数据范围（合并时间范围 + 结果模式） -->
+                <div class="toolbar-group">
+                    <span class="toolbar-label">数据范围</span>
+                    <select id="dataRange" class="select-sm">
+                        <option value="default">近一年</option>
+                        <option value="full">全部数据</option>
+                        <option value="after=2026-01-01">2026年至今</option>
+                        <option value="after=2025-01-01">2025年至今</option>
+                        <option value="after=2024-01-01">2024年至今</option>
+                        <option value="after=2023-01-01">2023年至今</option>
+                    </select>
+                    <span class="tooltip-wrapper">
+                        <span class="tooltip-icon">?</span>
+                        <span class="tooltip-content">FOFA 默认仅返回近一年数据，选择「全部」可搜索历史全量数据</span>
+                    </span>
+                </div>
+
+                <!-- 右侧：高级选项 -->
+                <div style="margin-left: auto;">
+                    <button class="btn btn-ghost btn-sm" onclick="toggleAdvanced()">高级选项</button>
+                </div>
+            </div>
+
+            <!-- 高级选项（缓存设置） -->
+            <div class="advanced-options" id="advancedOptions">
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label>缓存设置</label>
+                        <div class="cache-config">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="useCache" checked>
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">使用缓存</span>
+                            </label>
+                            <button class="btn btn-sm" onclick="showCacheManager()">管理</button>
+                        </div>
+                        <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 11px; color: var(--text-muted);">有效期:</span>
+                            <div class="cache-time-input">
+                                <input type="number" id="cacheTimeValue" value="6" min="1" max="365">
+                                <select id="cacheTimeUnit">
+                                    <option value="hours">小时</option>
+                                    <option value="days">天</option>
+                                    <option value="months" selected>月</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="config-item">
+                        <label>已选字段标签</label>
+                        <div class="fields-selected-tags" id="selectedFieldsTags"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速筛选面板（折叠） -->
+        <div class="quick-filters" id="quickFiltersPanel" style="display: none;">
+            <div class="filter-categories show" id="filterCategories"></div>
+            <div class="active-filters" id="activeFilters"></div>
+        </div>
+
+        <!-- 结果区域 -->
+        <div class="results-section">
+            <!-- 结果信息栏 -->
+            <div class="results-info" id="statsGrid">
+                <div class="results-info-left">
+                    <div class="results-stat">
+                        <span class="label">结果</span>
+                        <span class="value accent" id="totalResults">0</span>
+                    </div>
+                    <div class="results-stat">
+                        <span class="label">页码</span>
+                        <span class="value" id="currentPage">1</span>
+                    </div>
+                    <div class="results-stat">
+                        <span class="label">F点</span>
+                        <span class="value" id="consumedFpoint">-</span>
+                    </div>
+                    <div class="results-stat" id="quotaWarning" style="display: none;">
+                        <span class="value" style="color: var(--warning); font-size: 11px;" id="quotaWarningText">-</span>
+                    </div>
+                    <div class="results-stat">
+                        <span class="label">耗时</span>
+                        <span class="value" id="queryTime">-</span>
+                    </div>
+                    <!-- 内联分页（顶部） -->
+                    <div class="inline-pagination" id="inlinePagination" style="display: none;"></div>
+                </div>
+                <div class="results-info-right" id="downloadButtons" style="display: none;">
+                    <button class="btn btn-sm" onclick="downloadCurrentPage()" title="下载当前页">当前页</button>
+                    <button class="btn btn-primary btn-sm" onclick="downloadAllPages()" title="下载全部">下载全部</button>
+                </div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在搜索...</p>
+            </div>
+
+            <!-- 空状态 -->
+            <div class="empty-state" id="emptyState">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                </svg>
+                <h3>开始搜索</h3>
+                <p>输入查询语句搜索网络资产，支持 FOFA 查询语法</p>
+            </div>
+
+            <!-- 数据表格 -->
+            <div class="table-container" id="tableContainer" style="display: none;">
+                <table>
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- 底部分页 -->
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <!-- API Key 配置弹窗 -->
+    <div class="modal-overlay" id="apiKeyModal">
+        <div class="modal">
+            <h2 class="modal-title">API Key 配置</h2>
+            <p class="modal-desc">
+                请输入您的 FOFA API Key，保存在本地浏览器中。
+            </p>
+            <div class="modal-input-wrapper">
+                <input type="password" class="modal-input" id="apiKeyInput" placeholder="请输入 API Key">
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" title="显示/隐藏">
+                    <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <a onclick="window.openUrl('https://fofa.info/userInfo')" class="link" style="font-size: 13px; cursor: pointer;">
+                    前往 FOFA 个人中心获取 API Key →
+                </a>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="saveApiKey()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 缓存管理弹窗 -->
+    <div class="modal-overlay" id="cacheModal">
+        <div class="modal">
+            <h2 class="modal-title">缓存管理</h2>
+            <div id="cacheStats" style="margin-bottom: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="padding: 14px; background: var(--bg); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: var(--primary);" id="cacheCount">0</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">缓存条数</div>
+                    </div>
+                    <div style="padding: 14px; background: var(--bg); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: var(--success);" id="cacheExpiry">24h</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">有效期</div>
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 12px;">
+                <p style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 10px;">导出缓存数据</p>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">选择查询（留空导出全部）</label>
+                    <select id="exportQuerySelect" style="width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); font-size: 12px;">
+                        <option value="">全部缓存数据</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-primary btn-sm" onclick="exportCacheData('csv')" style="flex: 1;">导出 CSV</button>
+                    <button class="btn btn-sm" onclick="exportCacheData('json')" style="flex: 1;">导出 JSON</button>
+                </div>
+            </div>
+            <div style="padding: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 16px;">
+                <p style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">缓存说明</p>
+                <ul style="font-size: 11px; color: var(--text-muted); list-style: none; line-height: 1.8;">
+                    <li>- 相同查询条件优先使用缓存数据</li>
+                    <li>- 基于查询语句、页码、每页数量、字段组合</li>
+                    <li>- 可降低 API 调用频率，节省 F 点消耗</li>
+                </ul>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="clearAllCache()">清除所有缓存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 使用统计弹窗 -->
+    <div class="modal-overlay" id="usageModal">
+        <div class="modal" style="max-width: 380px;">
+            <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                使用统计
+            </h2>
+            <p class="modal-desc" id="usageMonth" style="margin-bottom: 20px; font-weight: 500; color: var(--text);"></p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                <div style="text-align: center; padding: 16px 8px; background: var(--bg); border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--primary);" id="usageApiCalls">0</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">API 调用</div>
+                </div>
+                <div style="text-align: center; padding: 16px 8px; background: var(--bg); border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--success);" id="usageDownloads">0</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">下载次数</div>
+                </div>
+                <div style="text-align: center; padding: 16px 8px; background: var(--bg); border-radius: 8px;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--warning);" id="usageFPoints">0</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">消耗 F点</div>
+                </div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
+                统计数据按月清零，仅记录本机使用情况
+            </div>
+        </div>
+    </div>
+
+    <!-- 关于弹窗 -->
+    <div class="modal-overlay" id="aboutModal">
+        <div class="modal" style="max-width: 380px;">
+            <div class="about-content">
+                <div class="about-logo">
+                    <img src="icons/128x128.png" alt="FOFA Leak Search">
+                </div>
+                <div class="about-name">FOFA Leak Search</div>
+                <div class="about-version">v1.0.0</div>
+                <div class="about-info">
+                    <div>作者：<strong>Mrxn</strong></div>
+                    <div><a onclick="window.openUrl('https://github.com/Mr-xn')" style="cursor:pointer">GitHub 主页 ↗</a></div>
+                    <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search')" style="cursor:pointer">项目仓库 ↗</a></div>
+                    <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search/issues')" style="cursor:pointer">问题反馈 ↗</a></div>
+                    <div>数据来源：<a onclick="window.openUrl('https://fofa.info')" style="cursor:pointer">FOFA</a></div>
+                </div>
+                <div class="about-copyright">
+                    © 2026 Mrxn · MIT License<br>
+                    本工具仅用于安全研究与授权测试
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户信息面板 -->
+    <div class="user-info-panel" id="userInfoPanel" onclick="event.stopPropagation()">
+        <div class="panel-content" id="userInfoContent">
+            <div style="text-align: center; padding: 40px 0;">
+                <p style="color: var(--text-muted); font-size: 13px;">请先配置 API Key</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 下载进度展示区域（固定在右下角） -->
+    <div class="download-progress" id="downloadProgress" style="display: none;">
+        <div class="download-progress-header">
+            <span class="download-progress-title">📥 下载进度</span>
+            <button class="download-progress-close" onclick="window.hideDownloadProgress()">&times;</button>
+        </div>
+        <div class="download-progress-body">
+            <div class="download-progress-status" id="downloadStatus">准备中...</div>
+            <div class="download-progress-bar-container">
+                <div class="download-progress-bar" id="downloadProgressBar"></div>
+            </div>
+            <div class="download-progress-info" id="downloadInfo">0 / 0 页</div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

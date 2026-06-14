@@ -4,6 +4,7 @@
   "description": "FOFA Leak Search - Cross-platform Desktop Application",
   "private": true,
   "scripts": {
+    "prepare:frontend": "node ./scripts/prepare-frontend.mjs",
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build"
