@@ -54,36 +54,56 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           CODENAME="$(lsb_release -cs)"
+      
           sudo dpkg --add-architecture arm64
-
+      
           if [ -f /etc/apt/sources.list ]; then
             sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
           fi
-
+      
           if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-            sudo sed -i '/^Architectures:/d; /^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+            sudo sed -i '/^Architectures:/d; /^Types: deb$/a Architectures: amd64' \
+              /etc/apt/sources.list.d/ubuntu.sources
           fi
-
+      
           {
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main restricted universe multiverse"
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe multiverse"
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-backports main restricted universe multiverse"
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-security main restricted universe multiverse"
           } | sudo tee /etc/apt/sources.list.d/arm64.list
-
+      
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          sudo apt-get install -y libwebkit2gtk-4.1-dev:arm64 libgtk-3-dev:arm64 libayatana-appindicator3-dev:arm64 librsvg2-dev:arm64 patchelf
-
+      
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            pkg-config \
+            libssl-dev:arm64 \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libgtk-3-dev:arm64 \
+            libayatana-appindicator3-dev:arm64 \
+            librsvg2-dev:arm64 \
+            patchelf
+      
           mkdir -p ~/.cargo
-          echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
-          echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+      
+          cat >> ~/.cargo/config.toml <<EOF
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+      
           echo 'CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
           echo 'CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++' >> $GITHUB_ENV
+      
           echo 'PKG_CONFIG_ALLOW_CROSS=1' >> $GITHUB_ENV
           echo 'PKG_CONFIG_SYSROOT_DIR=/' >> $GITHUB_ENV
-          echo 'PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' >> $GITHUB_ENV
-
+          echo 'PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig' >> $GITHUB_ENV
+      
+          echo 'OPENSSL_DIR=/usr' >> $GITHUB_ENV
+          echo 'OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu' >> $GITHUB_ENV
+          echo 'OPENSSL_INCLUDE_DIR=/usr/include' >> $GITHUB_ENV
+          
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
