@@ -21,12 +21,16 @@ jobs:
             target: x86_64-apple-darwin
           - platform: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
           - platform: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            bundles: deb,rpm
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            bundles: msi,nsis
           - platform: windows-latest
             target: aarch64-pc-windows-msvc
+            bundles: msi,nsis
 
     runs-on: ${{ matrix.platform }}
 
@@ -118,7 +122,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npx tauri
-          args: --target ${{ matrix.target }}
+          args: >
+            --target ${{ matrix.target }}
+            ${{ matrix.bundles && format('--bundles {0}', matrix.bundles) || '' }}
 
   create-release:
     needs: build
