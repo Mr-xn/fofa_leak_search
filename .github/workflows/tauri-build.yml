@@ -121,52 +121,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tagName: ${{ github.ref_name }}
+          releaseName: FOFA Leak Search ${{ github.ref_name }}
+          releaseBody: |
+            FOFA Leak Search Desktop Release
+          releaseDraft: true
+          prerelease: false
           tauriScript: npx tauri
           args: >
             --target ${{ matrix.target }}
             ${{ matrix.bundles && format('--bundles {0}', matrix.bundles) || '' }}
 
-  create-release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.VERSION }}
-          name: "FOFA Leak Search ${{ steps.version.outputs.VERSION }}"
-          body: |
-            ## FOFA Leak Search Desktop - ${{ steps.version.outputs.VERSION }}
-
-            ### 下载说明
-            - **macOS (Apple Silicon)**: `.app.tar.gz` 或 `.dmg`
-            - **macOS (Intel)**: `.app.tar.gz` 或 `.dmg`
-            - **Windows (x64)**: `.msi` 或 `.exe` 安装程序
-            - **Windows (ARM64)**: `.msi` 或 `.exe` 安装程序
-            - **Linux (x64)**: `.AppImage` 或 `.deb`
-            - **Linux (ARM64)**: `.AppImage` 或 `.deb`
-
-            ### macOS 安装说明
-            1. 下载 `.app.tar.gz` 文件并解压
-            2. 将 `.app` 拖入 Applications 文件夹
-            3. 首次打开可能需要在「系统偏好设置 > 安全性与隐私」中允许运行
-
-            ### Windows 安装说明
-            下载 `.msi` 或 `.exe` 安装程序，双击运行即可。
-
-            ### Linux 安装说明
-            - AppImage: `chmod +x *.AppImage && ./fofa-leak-search*.AppImage`
-            - Deb: `sudo dpkg -i fofa-leak-search*.deb`
-          draft: true
-          prerelease: false
