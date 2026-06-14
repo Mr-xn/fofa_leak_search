@@ -1,0 +1,79 @@
+// js/utils.js - 工具函数
+
+// ==================== Toast 提示 ====================
+export function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `toast ${type} show`;
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
+}
+
+// ==================== 数字格式化 ====================
+export function formatNumber(num) {
+    if (num >= 10000) {
+        return (num / 10000).toFixed(1) + '万';
+    }
+    return num.toLocaleString();
+}
+
+// ==================== 时间格式化 ====================
+export function formatTime(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diff = now - date;
+
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+    if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+    return date.toLocaleDateString('zh-CN');
+}
+
+// ==================== HTML 转义 ====================
+export function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ==================== 防抖函数 ====================
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// ==================== 缓存时间格式化 ====================
+export function formatCacheExpiry() {
+    const value = parseInt(localStorage.getItem('fofa_cache_time_value') || '1');
+    const unit = localStorage.getItem('fofa_cache_time_unit') || 'days';
+    const unitNames = {
+        'hours': '小时',
+        'days': '天',
+        'months': '个月'
+    };
+    return `${value} ${unitNames[unit] || '天'}`;
+}
+
+// ==================== 获取缓存过期时间（毫秒）====================
+export function getCacheExpiry() {
+    const value = parseInt(localStorage.getItem('fofa_cache_time_value') || '1');
+    const unit = localStorage.getItem('fofa_cache_time_unit') || 'days';
+
+    switch (unit) {
+        case 'hours': return value * 60 * 60 * 1000;
+        case 'days': return value * 24 * 60 * 60 * 1000;
+        case 'months': return value * 30 * 24 * 60 * 60 * 1000;
+        default: return 365 * 24 * 60 * 60 * 1000;
+    }
+}
