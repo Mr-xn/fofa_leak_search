@@ -1,0 +1,122 @@
+name: Tauri Desktop Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+          - platform: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - platform: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: windows-latest
+            target: aarch64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux ARM64 cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          # 添加 ARM64 源
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ $(lsb_release -cs) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y libwebkit2gtk-4.1-dev:arm64 libgtk-3-dev:arm64 libappindicator3-dev:arm64 librsvg2-dev:arm64 patchelf:arm64
+          # 配置链接器
+          mkdir -p ~/.cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+          args: --target ${{ matrix.target }}
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: "FOFA Leak Search ${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## FOFA Leak Search Desktop - ${{ steps.version.outputs.VERSION }}
+
+            ### 下载说明
+            - **macOS (Apple Silicon)**: `.app.tar.gz` 或 `.dmg`
+            - **macOS (Intel)**: `.app.tar.gz` 或 `.dmg`
+            - **Windows (x64)**: `.msi` 或 `.exe` 安装程序
+            - **Windows (ARM64)**: `.msi` 或 `.exe` 安装程序
+            - **Linux (x64)**: `.AppImage` 或 `.deb`
+            - **Linux (ARM64)**: `.AppImage` 或 `.deb`
+
+            ### macOS 安装说明
+            1. 下载 `.app.tar.gz` 文件并解压
+            2. 将 `.app` 拖入 Applications 文件夹
+            3. 首次打开可能需要在「系统偏好设置 > 安全性与隐私」中允许运行
+
+            ### Windows 安装说明
+            下载 `.msi` 或 `.exe` 安装程序，双击运行即可。
+
+            ### Linux 安装说明
+            - AppImage: `chmod +x *.AppImage && ./fofa-leak-search*.AppImage`
+            - Deb: `sudo dpkg -i fofa-leak-search*.deb`
+          draft: true
+          prerelease: false
