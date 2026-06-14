@@ -1,0 +1,8 @@
+node_modules/** linguist-generated
+src-tauri/target/** linguist-generated
+dist/** linguist-generated
+
+js/** linguist-detectable=false
+index.html linguist-detectable=false
+package.json linguist-detectable=false
+package-lock.json linguist-detectable=false
