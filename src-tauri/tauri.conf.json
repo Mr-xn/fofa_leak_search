@@ -3,12 +3,14 @@
   "productName": "FOFA Leak Search",
   "version": "1.1.0",
   "identifier": "com.fofa.leak-search",
+
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "..",
     "devUrl": "http://localhost:8000",
     "beforeDevCommand": "",
-    "beforeBuildCommand": "rm -rf dist/* && cp index.html dist/ && cp -r js dist/ && cp -r src-tauri/icons dist/"
+    "beforeBuildCommand": ""
   },
+
   "app": {
     "withGlobalTauri": true,
     "windows": [
@@ -28,6 +30,7 @@
       "csp": null
     }
   },
+
   "bundle": {
     "active": true,
     "icon": [
