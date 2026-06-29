@@ -1,0 +1,72 @@
+# =========================
+# Tauri / Rust
+# =========================
+/src-tauri/target/
+/src-tauri/binaries/
+/src-tauri/gen/
+/src-tauri/.omc/
+*.spec
+
+# =========================
+# Node.js
+# =========================
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Build Artifacts
+# =========================
+/build/
+
+# =========================
+# Operating System
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# Python (Development Only)
+# =========================
+__pycache__/
+*.pyc
+
+# =========================
+# Development Files
+# =========================
+server.py
+Dockerfile
+docker-compose.yml
+docker-compose-dev.yml
+.dockerignore
+
+scripts/build-tauri.sh
+scripts/prepare-frontend.sh
+
+FOFA_API_Documentation.md
+vitest.config.js
+
+js/search.test.js
+js/stats.test.js
+
+# =========================
+# Internal Tool State
+# =========================
+.omc/
+.claude/
+messages.json
+docs/
+restart.sh
+
+# =========================
+# GitHub
+# =========================
+.github/
