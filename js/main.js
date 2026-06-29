@@ -1,20 +1,25 @@
 // js/main.js - 主入口（初始化、事件绑定）
 
 import { state, STORAGE_KEYS } from './config.js';
-import { showToast, debounce } from './utils.js';
+import { showToast, debounce, escapeHtml } from './utils.js';
 import { initTauriBridge, isTauri, openUrl } from './tauri-bridge.js';
-import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as clearAllCacheStorage, getCachedUserInfo, setCachedUserInfo, getUsageStats } from './storage.js';
+import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as clearAllCacheStorage, getCachedUserInfo, setCachedUserInfo, getUsageStats, getHistoryFilters } from './storage.js';
 import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey,
          showCacheManager, closeCacheModal, initFieldTags, closeUserInfo, exportCacheData,
          toggleFieldsDropdown, toggleField, removeField,
          initQuickFilters, toggleFilters, toggleFilter, updateFilterOperator, updateFilterInput, removeFilter, clearAllFilters, getFilterQuery,
          restoreFiltersFromData,
-         exportConfigToFile, importConfigFromFile, toggleAdvanced } from './ui.js';
-import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchResults } from './search.js';
-import { getHistoryFilters } from './storage.js';
-import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn } from './results.js';
+         exportConfigToFile, importConfigFromFile, toggleAdvanced, setSearchButtonUpdater,
+         showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings,
+         resetUserAgent, saveRequestConfig } from './ui.js';
+import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchResults, updateSearchButtonState } from './search.js';
+import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults } from './results.js';
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
+import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
+import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
+import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
+import { getSelectedFields } from './ui.js';
 
 // ==================== 全局函数导出 ====================
 // HTML 中的 onclick 需要访问这些函数
@@ -44,12 +49,21 @@ window.removeFilter = removeFilter;
 window.clearAllFilters = clearAllFilters;
 window.exportConfigToFile = exportConfigToFile;
 window.importConfigFromFile = importConfigFromFile;
+window.showSettingsModal = showSettingsModal;
+window.closeSettingsModal = closeSettingsModal;
+window.saveSettingsApiKey = saveSettingsApiKey;
+window.toggleSettingsPassword = toggleSettingsPassword;
+window.saveProxySettings = saveProxySettings;
+window.resetUserAgent = resetUserAgent;
+window.saveRequestConfig = saveRequestConfig;
 window.downloadCurrentPage = downloadCurrentPage;
 window.downloadAllPages = downloadAllPages;
 window.closeDownloadModal = closeDownloadModal;
 window.startDownload = startDownload;
 window.hideDownloadProgress = hideDownloadProgress;
 window.openUrl = openUrl;
+window.toggleStats = toggleStats;
+window.refreshStats = refreshStats;
 window.selectSuggestion = (query) => {
     document.getElementById('searchInput').value = query;
     hideSuggestions();
@@ -72,16 +86,320 @@ window.copyColumn = copyColumn;
 window.goToPage = goToPage;
 window.toggleAdvanced = toggleAdvanced;
 
+// ==================== 智能分片下载 ====================
+let smartPlanSteps = [];
+let smartMergedResults = null;
+
+window.openSmartDownload = () => {
+    if (!state.currentQuery) {
+        showToast('请先执行搜索', 'error');
+        return;
+    }
+    if (!state.apiKey) {
+        showApiKeyModal();
+        return;
+    }
+    // 重置状态
+    smartPlanSteps = [];
+    smartMergedResults = null;
+
+    const modal = document.getElementById('smartDownloadModal');
+    modal.classList.add('show');
+
+    // 重置 UI
+    document.getElementById('smartAnalyzeInfo').innerHTML = '点击「开始分析」统计当前查询的数据分布';
+    document.getElementById('smartModalEl').classList.remove('expanded');
+    document.getElementById('smartPhasePlan').style.display = 'none';
+    document.getElementById('smartPlanGrid').innerHTML = '';
+    document.getElementById('smartPlanBadge').textContent = '';
+    document.getElementById('smartPhaseExecute').style.display = 'none';
+    document.getElementById('smartResultSummary').style.display = 'none';
+    document.getElementById('smartStartBtn').style.display = '';
+    document.getElementById('smartExecuteBtn').style.display = 'none';
+    document.getElementById('smartExportBtn').style.display = 'none';
+
+    setPhaseIcon('smartPhaseAnalyzeIcon', 'pending', '1');
+    setPhaseIcon('smartPhasePlanIcon', 'pending', '2');
+    setPhaseIcon('smartPhaseExecuteIcon', 'pending', '3');
+};
+
+window.closeSmartDownload = () => {
+    document.getElementById('smartDownloadModal').classList.remove('show');
+};
+
+window.startSmartDownload = async () => {
+    const startBtn = document.getElementById('smartStartBtn');
+    startBtn.disabled = true;
+    startBtn.textContent = '分析中...';
+
+    const freeLimit = getFreeLimit();
+
+    // Step 0: 配额预检查
+    const vipLevel = getVipLevel();
+    const monthlyQuota = getMonthlyQuota();
+    const monthlyUsed = getMonthlyUsed();
+    const remaining = getRemainingQuota();
+
+    if (remaining === 0) {
+        setPhaseIcon('smartPhaseAnalyzeIcon', 'error', '✗');
+        document.getElementById('smartAnalyzeInfo').innerHTML =
+            `<span style="color:var(--error)">⚠ 当月数据配额已用尽 (${monthlyUsed.toLocaleString()}/${monthlyQuota === Infinity ? '无限制' : monthlyQuota.toLocaleString()})</span><br>` +
+            `当前等级: <strong>${VIP_LEVEL_MAP[vipLevel] || '注册用户'}</strong><br>` +
+            `请下月再试或升级账户以获取更多配额`;
+        startBtn.disabled = false;
+        startBtn.textContent = '重新分析';
+        return;
+    }
+
+    // Phase 1: 分析
+    setPhaseIcon('smartPhaseAnalyzeIcon', 'running', '⟳');
+    document.getElementById('smartAnalyzeInfo').innerHTML = '正在查询数据分布...';
+
+    const stats = await analyzeDimensions(state.currentQuery);
+    if (!stats) {
+        setPhaseIcon('smartPhaseAnalyzeIcon', 'error', '✗');
+        document.getElementById('smartAnalyzeInfo').innerHTML = '<span style="color:var(--error)">分析失败，请检查 API Key 和网络</span>';
+        startBtn.disabled = false;
+        startBtn.textContent = '重新分析';
+        return;
+    }
+
+    // 计算本次可用量
+    const { limit: maxTotalLimit, reason: limitReason } = getMaxDownloadLimit(stats.size);
+
+    if (maxTotalLimit === 0) {
+        setPhaseIcon('smartPhaseAnalyzeIcon', 'error', '✗');
+        document.getElementById('smartAnalyzeInfo').innerHTML =
+            `<span style="color:var(--error)">⚠ 配额不足，无法下载</span><br>` +
+            `查询匹配: ${stats.size.toLocaleString()} 条 · ${limitReason}`;
+        startBtn.disabled = false;
+        startBtn.textContent = '重新分析';
+        return;
+    }
+
+    setPhaseIcon('smartPhaseAnalyzeIcon', 'done', '✓');
+
+    // 显示分析结果 + 配额信息
+    let analyzeHtml = `<div class="query-line">${escapeHtml(state.currentQuery)}</div>`;
+    analyzeHtml += `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">`;
+    analyzeHtml += `<span><strong>数据量：</strong>${stats.size.toLocaleString()} 条</span>`;
+    analyzeHtml += `<span><strong>单次限制：</strong>${freeLimit.toLocaleString()} 条</span>`;
+    analyzeHtml += `<span><strong>需要拆分：</strong>${maxTotalLimit > freeLimit ? '是 (' + Math.ceil(maxTotalLimit / freeLimit) + ' 次)' : '否'}</span>`;
+    analyzeHtml += `</div>`;
+
+    // 配额信息
+    analyzeHtml += `<div style="margin: 10px 0 0; padding: 8px 12px; background: var(--primary-light); border-radius: 6px; font-size: 12px; line-height: 1.7;">`;
+    analyzeHtml += `<strong>配额：</strong>${VIP_LEVEL_MAP[vipLevel] || '注册用户'} · `;
+    analyzeHtml += `已用 ${monthlyUsed.toLocaleString()} 条 · `;
+    if (monthlyQuota === Infinity) {
+        analyzeHtml += `无限制`;
+    } else {
+        analyzeHtml += `配额 ${monthlyQuota.toLocaleString()} · 剩余 ${remaining.toLocaleString()}`;
+    }
+    analyzeHtml += `<br>`;
+    analyzeHtml += `<strong>本次可用：</strong>${maxTotalLimit.toLocaleString()} 条 — ${limitReason}`;
+    analyzeHtml += `</div>`;
+
+    if (stats.distinct) {
+        const parts = [];
+        if (stats.distinct.ip) parts.push(`IP: ${stats.distinct.ip.toLocaleString()}`);
+        if (stats.distinct.domain) parts.push(`域名: ${stats.distinct.domain.toLocaleString()}`);
+        if (stats.distinct.server) parts.push(`Server: ${stats.distinct.server.toLocaleString()}`);
+        if (parts.length > 0) {
+            analyzeHtml += `<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">${parts.join(' · ')}</div>`;
+        }
+    }
+
+    // 显示各维度 top 5
+    if (stats.aggs) {
+        const fieldLabels = { asn: 'ASN', country: '国家', port: '端口', server: 'HTTP Server', org: '组织' };
+        for (const [field, items] of Object.entries(stats.aggs)) {
+            if (!items || items.length === 0) continue;
+            analyzeHtml += `<div style="margin-top:8px;"><strong style="font-size:12px;">${fieldLabels[field] || field} Top 5</strong></div>`;
+            analyzeHtml += `<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;">`;
+            items.forEach(item => {
+                analyzeHtml += `${item.name}(${item.count.toLocaleString()}) `;
+            });
+            analyzeHtml += `</div>`;
+        }
+    }
+
+    document.getElementById('smartAnalyzeInfo').innerHTML = analyzeHtml;
+
+    // Phase 2: 规划 (传入 maxTotalLimit)
+    setPhaseIcon('smartPhasePlanIcon', 'running', '⟳');
+    document.getElementById('smartPhasePlan').style.display = '';
+    document.getElementById('smartModalEl').classList.add('expanded');
+
+    smartPlanSteps = planQueries(state.currentQuery, stats, freeLimit, maxTotalLimit);
+    renderPlanSteps();
+
+    // 更新方案数量徽标
+    const planCount = smartPlanSteps.length;
+    const planTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
+    document.getElementById('smartPlanBadge').textContent = `${planCount} 步 · ${planTotal.toLocaleString()} 条`;
+
+    setPhaseIcon('smartPhasePlanIcon', 'done', '✓');
+    document.getElementById('smartExecuteBtn').style.display = '';
+
+    startBtn.disabled = false;
+    startBtn.textContent = '重新分析';
+};
+
+window.executeSmartDownload = async () => {
+    const execBtn = document.getElementById('smartExecuteBtn');
+    execBtn.disabled = true;
+    execBtn.textContent = '下载中...';
+    document.getElementById('smartStartBtn').disabled = true;
+
+    // Phase 3: 执行
+    setPhaseIcon('smartPhaseExecuteIcon', 'running', '⟳');
+    document.getElementById('smartPhaseExecute').style.display = '';
+    document.getElementById('smartPhaseExecute').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const fields = getSelectedFields();
+    const startTime = Date.now();
+
+    const result = await executePlan(state.currentQuery, smartPlanSteps, fields, (steps) => {
+        renderPlanSteps();
+        // 更新进度条
+        const done = steps.filter(s => s.status === 'done' || s.status === 'error').length;
+        const total = steps.length;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        document.getElementById('smartProgressBar').style.width = `${pct}%`;
+        document.getElementById('smartExecuteInfo').innerHTML = `已完成 ${done}/${total} 步 (${pct}%)`;
+    });
+
+    smartMergedResults = result.mergedResults;
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    // 更新最终状态
+    const hasErrors = smartPlanSteps.some(s => s.status === 'error');
+    setPhaseIcon('smartPhaseExecuteIcon', hasErrors ? 'error' : 'done', hasErrors ? '!' : '✓');
+
+    // 显示结果摘要
+    document.getElementById('smartResultSummary').style.display = '';
+    document.getElementById('smartTotalFetched').textContent = result.stats.totalFetched.toLocaleString();
+    document.getElementById('smartUniqueCount').textContent = result.stats.uniqueCount.toLocaleString();
+    document.getElementById('smartDuplicateCount').textContent = result.stats.duplicateCount.toLocaleString();
+    document.getElementById('smartStepsInfo').textContent = `${result.stats.stepsCompleted}/${result.stats.stepsTotal}`;
+
+    document.getElementById('smartExecuteInfo').innerHTML =
+        `下载完成，耗时 ${elapsed}s。去重后 <strong>${result.stats.uniqueCount.toLocaleString()}</strong> 条唯一数据。` +
+        (result.stats.duplicateCount > 0 ? ` (${result.stats.duplicateCount.toLocaleString()} 条重复已去除)` : '') +
+        (hasErrors ? ' <span style="color:var(--error)">⚠ 部分步骤失败</span>' : '');
+
+    execBtn.style.display = 'none';
+    document.getElementById('smartExportBtn').style.display = '';
+    document.getElementById('smartStartBtn').disabled = false;
+
+    showToast(`智能下载完成: ${result.stats.uniqueCount.toLocaleString()} 条数据`, 'success');
+};
+
+window.exportSmartResults = () => {
+    if (!smartMergedResults || smartMergedResults.length === 0) {
+        showToast('没有可导出的数据', 'error');
+        return;
+    }
+
+    const fields = getSelectedFields().split(',');
+    const BOM = '﻿';
+    const header = fields.map(f => `"${f}"`).join(',');
+
+    // 根据设置决定是否添加查询元数据行
+    const includeQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) === 'true';
+    let metaRow = '';
+    if (includeQuery) {
+        const queryStr = state.currentQuery || '(无)';
+        const exportTime = new Date().toLocaleString('zh-CN', { hour12: false });
+        const escapedQuery = String(queryStr).replace(/"/g, '""');
+        metaRow = `"查询: ${escapedQuery}    导出时间: ${exportTime}    条数: ${smartMergedResults.length}",` + fields.slice(1).map(() => '').join(',') + '\n';
+    }
+
+    const rows = smartMergedResults.map(row =>
+        row.map(cell => {
+            const value = cell ?? '';
+            return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+    );
+
+    const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    link.download = `fofa_smart_${smartMergedResults.length}条_${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`已导出 ${smartMergedResults.length} 条数据`, 'success');
+};
+
+function setPhaseIcon(id, status, text) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = `phase-icon phase-${status}`;
+    el.textContent = text;
+}
+
+function renderPlanSteps() {
+    const grid = document.getElementById('smartPlanGrid');
+    if (!grid) return;
+
+    grid.innerHTML = smartPlanSteps.map(step => {
+        const statusClass = `step-${step.status}`;
+        const iconMap = { pending: '○', running: '⟳', done: '✓', error: '✗' };
+        const iconClass = `phase-${step.status}`;
+        const retryInfo = step.retryCount > 1 ? ` <span style="color:var(--warning);font-size:10px;">重试${step.retryCount}/${MAX_RETRIES}</span>` : '';
+        const errorInfo = step.status === 'error' && step.errorMsg ? `<div class="step-error-msg">${escapeHtml(step.errorMsg)}</div>` : '';
+        const resultInfo = step.status === 'done' && step.results ? ` <span style="color:var(--success);font-size:10px;">(${step.results.length}条)</span>` : '';
+        return `
+            <div class="smart-plan-item ${statusClass}">
+                <span class="step-status-icon ${iconClass}">${iconMap[step.status]}</span>
+                <div class="step-content">
+                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}</div>
+                    <div class="step-query" title="${escapeHtml(step.query)}">${escapeHtml(step.query)}</div>
+                    ${errorInfo}
+                </div>
+                <span class="step-count">${step.estimatedSize.toLocaleString()} 条</span>
+            </div>
+        `;
+    }).join('');
+}
+
 // 使用统计弹窗
 window.showUsageStats = () => {
     const stats = getUsageStats();
     const now = new Date();
     const monthStr = `${now.getFullYear()}年${now.getMonth() + 1}月`;
 
+    // 获取配额信息
+    const vipLevel = getVipLevel();
+    const monthlyQuota = getMonthlyQuota();
+    const dataCount = stats.dataCount || 0;
+
     document.getElementById('usageMonth').textContent = `${monthStr} 使用情况`;
     document.getElementById('usageApiCalls').textContent = stats.apiCalls.toLocaleString();
     document.getElementById('usageDownloads').textContent = stats.downloads.toLocaleString();
     document.getElementById('usageFPoints').textContent = stats.fPoints.toLocaleString();
+    document.getElementById('usageDataCount').textContent = dataCount.toLocaleString();
+
+    // 配额进度条
+    const quotaBar = document.getElementById('usageQuotaBar');
+    const quotaText = document.getElementById('usageQuotaText');
+    if (monthlyQuota === Infinity) {
+        quotaBar.style.width = '0%';
+        quotaText.textContent = `${VIP_LEVEL_MAP[vipLevel] || '注册用户'} · 无限制`;
+    } else {
+        const pct = Math.min(100, Math.round((dataCount / monthlyQuota) * 100));
+        quotaBar.style.width = `${pct}%`;
+        quotaBar.style.background = pct > 80 ? 'var(--error)' : pct > 60 ? 'var(--warning)' : 'linear-gradient(90deg, var(--primary), #6366f1)';
+        quotaText.textContent = `${dataCount.toLocaleString()} / ${monthlyQuota.toLocaleString()} 条 (${pct}%) · ${VIP_LEVEL_MAP[vipLevel] || '注册用户'}`;
+    }
+
     document.getElementById('usageModal').classList.add('show');
 };
 
@@ -104,10 +422,57 @@ window.clearSearchInput = () => {
     searchInput.value = '';
     clearBtn.classList.remove('show');
     searchInput.focus();
+    updateSearchButtonState();
+};
+
+// 复制当前查询语句（解码后的明文）
+window.copyCurrentQuery = () => {
+    const query = state.currentQuery;
+    if (!query) {
+        showToast('没有可复制的查询语句', 'error');
+        return;
+    }
+
+    // 直接使用 state.currentQuery（已经是解码后的明文），无需 base64 解码
+    // 安全处理：使用 text/plain 写入剪贴板，避免 XSS
+    navigator.clipboard.writeText(query).then(() => {
+        const btn = document.getElementById('copyQueryBtn');
+        btn.classList.add('copied');
+        showToast('查询语句已复制', 'success');
+        setTimeout(() => {
+            btn.classList.remove('copied');
+        }, 1500);
+    }).catch(() => {
+        // 降级方案
+        const textarea = document.createElement('textarea');
+        textarea.value = query;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            const btn = document.getElementById('copyQueryBtn');
+            btn.classList.add('copied');
+            showToast('查询语句已复制', 'success');
+            setTimeout(() => {
+                btn.classList.remove('copied');
+            }, 1500);
+        } catch (e) {
+            showToast('复制失败', 'error');
+        }
+        document.body.removeChild(textarea);
+    });
 };
 
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', async () => {
+    // 设置搜索按钮更新函数（用于筛选条件变化时更新按钮状态）
+    setSearchButtonUpdater(updateSearchButtonState);
+
+    // 注入 fetchResults 到 results.js（打破 search.js ↔ results.js 循环依赖）
+    setFetchResults(fetchResults);
+
     // Tauri 桌面模式：禁用右键菜单和网页快捷键
     if (isTauri()) {
         // 禁用右键菜单，选中文字时自动复制
@@ -119,7 +484,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // 禁用网页默认快捷键
+        // 禁用网页默认快捷键（保留系统级快捷键）
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             const ctrl = e.ctrlKey || e.metaKey;
@@ -135,7 +500,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 允许 Ctrl/Cmd+A（在输入框内全选）
             if (ctrl && key === 'a' && e.target.matches('input, textarea')) return;
 
-            // 阻止所有 Ctrl/Cmd 组合键
+            // 允许系统级快捷键（macOS）
+            if (e.metaKey) {
+                // ⌘+Q - 退出应用
+                if (key === 'q') return;
+                // ⌘+M - 最小化窗口
+                if (key === 'm') return;
+                // ⌘+H - 隐藏应用
+                if (key === 'h') return;
+                // ⌘+W - 关闭窗口
+                if (key === 'w') return;
+                // ⌘+N - 新建窗口（如果支持）
+                if (key === 'n') return;
+                // ⌘+Tab - 切换应用（系统级）
+                if (key === 'tab') return;
+                // ⌘+, - 偏好设置（如果支持）
+                if (key === ',') return;
+                // ⌘+Space - Spotlight 搜索（系统级）
+                if (key === ' ') return;
+                // ⌘+⌥+H - 隐藏其他窗口
+                if (e.altKey && key === 'h') return;
+                // ⌘+⌃+F - 全屏
+                if (e.ctrlKey && key === 'f') return;
+            }
+
+            // 允许 Ctrl+Q（Linux/Windows）
+            if (e.ctrlKey && key === 'q') return;
+
+            // 阻止其他 Ctrl/Cmd 组合键
             if (ctrl) {
                 e.preventDefault();
                 return;
@@ -151,6 +543,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化 Tauri 桌面环境适配（Web 模式下为空操作）
     try {
         state.apiBaseUrl = await initTauriBridge();
+
+        // 恢复上次保存的代理配置到 Rust 侧（解决重启后代理不生效的问题）
+        if (isTauri()) {
+            const { setProxyConfig, setRequestConfig } = await import('./tauri-bridge.js');
+            const savedHost = localStorage.getItem(STORAGE_KEYS.proxyHost) || '';
+            const savedPort = parseInt(localStorage.getItem(STORAGE_KEYS.proxyPort)) || 0;
+            const savedUser = localStorage.getItem(STORAGE_KEYS.proxyUsername) || '';
+            const savedPass = localStorage.getItem(STORAGE_KEYS.proxyPassword) || '';
+            if (savedHost && savedPort) {
+                try {
+                    await setProxyConfig(savedHost, savedPort, savedUser, savedPass);
+                    console.log('[Init] Proxy config restored:', savedHost, savedPort);
+                } catch (e) { console.warn('[Init] Failed to restore proxy config:', e); }
+            }
+
+            // 恢复请求配置（User-Agent + 自定义 Headers）
+            const savedUA = localStorage.getItem(STORAGE_KEYS.userAgent) || '';
+            let savedHeaders = {};
+            try { savedHeaders = JSON.parse(localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}'); } catch {}
+            if (savedUA || Object.keys(savedHeaders).length > 0) {
+                try {
+                    await setRequestConfig(savedUA, savedHeaders);
+                    console.log('[Init] Request config restored');
+                } catch (e) { console.warn('[Init] Failed to restore request config:', e); }
+            }
+        }
     } catch (e) {
         if (isTauri()) {
             showToast('桌面环境初始化失败: ' + e.message, 'error');
@@ -191,6 +609,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.useCache = e.target.checked;
         localStorage.setItem(STORAGE_KEYS.useCache, state.useCache);
         showToast(state.useCache ? '已启用缓存' : '已禁用缓存', 'info');
+    });
+
+    // 初始化统计概览自动加载开关
+    const autoLoadStatsCheckbox = document.getElementById('autoLoadStats');
+    autoLoadStatsCheckbox.checked = localStorage.getItem(STORAGE_KEYS.autoLoadStats) === 'true';
+    autoLoadStatsCheckbox.addEventListener('change', (e) => {
+        localStorage.setItem(STORAGE_KEYS.autoLoadStats, e.target.checked);
+        showToast(e.target.checked ? '搜索时将自动加载统计概览' : '已关闭自动加载统计概览', 'info');
     });
 
     // 初始化缓存时间配置
@@ -250,11 +676,57 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 150);
     });
     searchInput.addEventListener('input', debounce(handleInputChange, 200));
+    searchInput.addEventListener('input', updateSearchButtonState);
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             doSearch();
         }
     });
+
+    // 初始化搜索按钮状态
+    updateSearchButtonState();
+    // 初始化统计按钮状态
+    updateStatsButtonState();
+
+    // 搜索完成后同步更新统计按钮状态
+    window.addEventListener('searchComplete', () => {
+        updateStatsButtonState();
+        // 启用复制查询按钮
+        const copyBtn = document.getElementById('copyQueryBtn');
+        if (copyBtn && state.currentQuery) {
+            copyBtn.disabled = false;
+        }
+    });
+
+    // 表格横向滚动阴影检测
+    const tableContainer = document.getElementById('tableContainer');
+    const tableWrapper = document.getElementById('tableWrapper');
+    const scrollShadow = document.getElementById('tableScrollShadow');
+    if (tableContainer && scrollShadow) {
+        const updateScrollShadow = () => {
+            // 仅在表格可见时检测
+            if (tableWrapper && tableWrapper.style.display === 'none') {
+                scrollShadow.classList.remove('visible');
+                return;
+            }
+            // 检测是否有横向溢出且未滚动到最右侧
+            const hasOverflow = tableContainer.scrollWidth > tableContainer.clientWidth + 1;
+            const isAtEnd = tableContainer.scrollLeft + tableContainer.clientWidth >= tableContainer.scrollWidth - 4;
+            if (hasOverflow && !isAtEnd) {
+                scrollShadow.classList.add('visible');
+            } else {
+                scrollShadow.classList.remove('visible');
+            }
+        };
+        tableContainer.addEventListener('scroll', updateScrollShadow, { passive: true });
+        // 使用 MutationObserver 监听表格内容变化
+        const observer = new MutationObserver(() => {
+            setTimeout(updateScrollShadow, 150);
+        });
+        observer.observe(tableContainer, { childList: true, subtree: true, characterData: true });
+        // 窗口大小变化时重新检测
+        window.addEventListener('resize', updateScrollShadow, { passive: true });
+    }
 
     // 点击外部关闭建议
     document.addEventListener('click', (e) => {
@@ -264,13 +736,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 点击遮罩层关闭弹窗
-    ['apiKeyModal', 'cacheModal', 'usageModal', 'aboutModal'].forEach(id => {
+    ['apiKeyModal', 'cacheModal', 'usageModal', 'aboutModal', 'smartDownloadModal', 'settingsModal'].forEach(id => {
         document.getElementById(id).addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay')) {
                 e.target.classList.remove('show');
             }
         });
     });
+
+    // 导出设置开关自动保存
+    const exportIncludeQueryToggle = document.getElementById('exportIncludeQuery');
+    if (exportIncludeQueryToggle) {
+        exportIncludeQueryToggle.addEventListener('change', () => {
+            localStorage.setItem(STORAGE_KEYS.exportIncludeQuery, exportIncludeQueryToggle.checked);
+        });
+    }
 
     // 点击外部关闭账户信息面板
     document.addEventListener('click', (e) => {

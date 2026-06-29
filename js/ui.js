@@ -3,6 +3,13 @@
 import { state, STORAGE_KEYS, FIELD_LABELS, DEFAULT_FIELDS, FIELDS_CONFIG, FILTERS_CONFIG, VIP_LEVEL_MAP } from './config.js';
 import { showToast, formatCacheExpiry, escapeHtml } from './utils.js';
 import { clearAllCache, getCacheStats, getCachedQueries, getAllCachedData, exportToCSV, exportToJSON } from './storage.js';
+import { setProxyConfig, getProxyConfig as getTauriProxyConfig, setRequestConfig, getRequestConfig } from './tauri-bridge.js';
+
+// 延迟导入 search.js 中的函数，避免循环依赖
+let _updateSearchButtonState = null;
+export function setSearchButtonUpdater(fn) {
+    _updateSearchButtonState = fn;
+}
 
 // ==================== API Key 管理 ====================
 export function showApiKeyModal() {
@@ -53,6 +60,223 @@ export function saveApiKey() {
     showToast('API Key 保存成功', 'success');
 }
 
+// ==================== 设置弹窗 ====================
+export function showSettingsModal() {
+    const modal = document.getElementById('settingsModal');
+    // 加载已保存的 API Key
+    const savedKey = localStorage.getItem(STORAGE_KEYS.apiKey) || '';
+    document.getElementById('settingsApiKeyInput').value = savedKey;
+    document.getElementById('settingsApiKeyInput').type = 'password';
+    // 重置眼睛图标
+    const eyeIcon = document.getElementById('settingsEyeIcon');
+    eyeIcon.innerHTML = `
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+    `;
+    // 加载导出设置（默认关闭）
+    const exportQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery);
+    document.getElementById('exportIncludeQuery').checked = exportQuery === 'true';
+    // 加载代理设置（优先从 localStorage，异步同步 Rust 侧）
+    document.getElementById('proxyHost').value = localStorage.getItem(STORAGE_KEYS.proxyHost) || '';
+    document.getElementById('proxyPort').value = localStorage.getItem(STORAGE_KEYS.proxyPort) || '';
+    document.getElementById('proxyUsername').value = localStorage.getItem(STORAGE_KEYS.proxyUsername) || '';
+    document.getElementById('proxyPassword').value = localStorage.getItem(STORAGE_KEYS.proxyPassword) || '';
+
+    // 加载请求设置
+    const savedUA = localStorage.getItem(STORAGE_KEYS.userAgent);
+    document.getElementById('userAgent').value = savedUA || '';
+    try {
+        const savedHeaders = JSON.parse(localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}');
+        const headerLines = Object.entries(savedHeaders).map(([k, v]) => `${k}: ${v}`).join('\n');
+        document.getElementById('customHeaders').value = headerLines;
+    } catch { /* ignore parse error */ }
+    document.getElementById('headerErrors').style.display = 'none';
+
+    // 异步从 Rust 侧获取最新代理配置
+    getTauriProxyConfig().then(config => {
+        if (config) {
+            document.getElementById('proxyHost').value = config.host || '';
+            document.getElementById('proxyPort').value = config.port || '';
+            document.getElementById('proxyUsername').value = config.username || '';
+            document.getElementById('proxyPassword').value = config.password || '';
+        }
+    }).catch(() => {});
+
+    // 异步从 Rust 侧获取最新请求配置
+    getRequestConfig().then(config => {
+        if (config) {
+            document.getElementById('userAgent').value = config.user_agent || '';
+            if (config.custom_headers) {
+                const lines = Object.entries(config.custom_headers).map(([k, v]) => `${k}: ${v}`).join('\n');
+                document.getElementById('customHeaders').value = lines;
+            }
+        }
+    }).catch(() => {});
+
+    modal.classList.add('show');
+}
+
+export function closeSettingsModal() {
+    document.getElementById('settingsModal').classList.remove('show');
+}
+
+export function saveSettingsApiKey() {
+    const apiKey = document.getElementById('settingsApiKeyInput').value.trim();
+    if (!apiKey) {
+        showToast('请输入 API Key', 'error');
+        return;
+    }
+    state.apiKey = apiKey;
+    localStorage.setItem(STORAGE_KEYS.apiKey, apiKey);
+    showToast('API Key 保存成功', 'success');
+}
+
+export function toggleSettingsPassword() {
+    const input = document.getElementById('settingsApiKeyInput');
+    const eyeIcon = document.getElementById('settingsEyeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        eyeIcon.innerHTML = `
+            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+        `;
+    } else {
+        input.type = 'password';
+        eyeIcon.innerHTML = `
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+        `;
+    }
+}
+
+export async function saveProxySettings() {
+    const host = document.getElementById('proxyHost').value.trim();
+    const port = parseInt(document.getElementById('proxyPort').value.trim()) || 0;
+    const username = document.getElementById('proxyUsername').value.trim();
+    const password = document.getElementById('proxyPassword').value.trim();
+
+    localStorage.setItem(STORAGE_KEYS.proxyHost, host);
+    localStorage.setItem(STORAGE_KEYS.proxyPort, port.toString());
+    localStorage.setItem(STORAGE_KEYS.proxyUsername, username);
+    localStorage.setItem(STORAGE_KEYS.proxyPassword, password);
+
+    // 同步到 Rust 侧（Tauri 环境）
+    try {
+        const result = await setProxyConfig(host, port, username, password);
+        console.log('[Proxy]', result);
+    } catch (e) {
+        console.warn('[Proxy] 同步到 Rust 侧失败（非 Tauri 环境可忽略）:', e);
+    }
+
+    if (host && port) {
+        showToast(`代理设置已保存: ${host}:${port}`, 'success');
+    } else if (!host && !port) {
+        showToast('代理设置已清除', 'success');
+    } else {
+        showToast('代理设置已保存（主机和端口需同时填写才生效）', 'info');
+    }
+}
+
+// ==================== 请求设置（User-Agent + 自定义 Headers） ====================
+
+// 默认 User-Agent
+const DEFAULT_USER_AGENT = 'curl/8.21.0';
+
+// 前端 header 校验（与 Rust 侧双重保障）
+function validateCustomHeaders(text) {
+    const errors = [];
+    const forbidden = ['host', 'content-length', 'transfer-encoding',
+        'connection', 'keep-alive', 'te', 'trailer',
+        'upgrade', 'proxy-authorization', 'proxy-authenticate'];
+
+    if (!text.trim()) return { headers: {}, errors: [] };
+
+    const lines = text.split('\n');
+    const headers = {};
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) {
+            errors.push(`第 ${i + 1} 行格式错误（缺少冒号）: ${line}`);
+            continue;
+        }
+
+        const name = line.substring(0, colonIdx).trim();
+        const value = line.substring(colonIdx + 1).trim();
+
+        if (!name) {
+            errors.push(`第 ${i + 1} 行 header 名称为空`);
+            continue;
+        }
+
+        if (name.startsWith(':')) {
+            errors.push(`第 ${i + 1} 行禁止伪头部: ${name}`);
+            continue;
+        }
+
+        if (forbidden.includes(name.toLowerCase())) {
+            errors.push(`第 ${i + 1} 行禁止手动设置: ${name}`);
+            continue;
+        }
+
+        if (!/^[A-Za-z0-9\-_]+$/.test(name)) {
+            errors.push(`第 ${i + 1} 行非法 header 名称（仅允许字母、数字、-、_）: ${name}`);
+            continue;
+        }
+
+        if (/[\r\n]/.test(value)) {
+            errors.push(`第 ${i + 1} 行 header 值包含非法换行符: ${name}`);
+            continue;
+        }
+
+        if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value)) {
+            errors.push(`第 ${i + 1} 行 header 值包含控制字符: ${name}`);
+            continue;
+        }
+
+        headers[name] = value;
+    }
+
+    return { headers, errors };
+}
+
+export function resetUserAgent() {
+    document.getElementById('userAgent').value = DEFAULT_USER_AGENT;
+}
+
+export async function saveRequestConfig() {
+    const userAgent = document.getElementById('userAgent').value.trim();
+    const customHeadersText = document.getElementById('customHeaders').value;
+    const errorDiv = document.getElementById('headerErrors');
+
+    // 前端校验
+    const { headers, errors } = validateCustomHeaders(customHeadersText);
+    if (errors.length > 0) {
+        errorDiv.textContent = errors.join('\n');
+        errorDiv.style.display = 'block';
+        showToast('自定义 Headers 格式有误，请修正', 'error');
+        return;
+    }
+    errorDiv.style.display = 'none';
+
+    // 保存到 localStorage
+    localStorage.setItem(STORAGE_KEYS.userAgent, userAgent);
+    localStorage.setItem(STORAGE_KEYS.customHeaders, JSON.stringify(headers));
+
+    // 同步到 Rust 侧
+    try {
+        const result = await setRequestConfig(userAgent, headers);
+        console.log('[RequestConfig]', result);
+        showToast('请求设置已保存', 'success');
+    } catch (e) {
+        console.warn('[RequestConfig] 同步到 Rust 侧失败:', e);
+        showToast('请求设置已保存（本地），Rust 同步失败: ' + (e.message || e), 'error');
+    }
+}
+
 // ==================== 配置导入导出 ====================
 // 获取当前配置对象
 function getConfigObject() {
@@ -68,7 +292,14 @@ function getConfigObject() {
             cacheTimeUnit: localStorage.getItem(STORAGE_KEYS.cacheTimeUnit) || 'days',
             pageSize: localStorage.getItem(STORAGE_KEYS.pageSize) || '100',
             dataRange: localStorage.getItem(STORAGE_KEYS.dataRange) || 'default',
-            activeFilters: localStorage.getItem(STORAGE_KEYS.activeFilters) || '{}'
+            activeFilters: localStorage.getItem(STORAGE_KEYS.activeFilters) || '{}',
+            exportIncludeQuery: localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) || 'true',
+            proxyHost: localStorage.getItem(STORAGE_KEYS.proxyHost) || '',
+            proxyPort: localStorage.getItem(STORAGE_KEYS.proxyPort) || '',
+            proxyUsername: localStorage.getItem(STORAGE_KEYS.proxyUsername) || '',
+            proxyPassword: localStorage.getItem(STORAGE_KEYS.proxyPassword) || '',
+            userAgent: localStorage.getItem(STORAGE_KEYS.userAgent) || '',
+            customHeaders: localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}'
         }
     };
 }
@@ -771,6 +1002,11 @@ export function getActiveFiltersData() {
     return filtersObj;
 }
 
+// 检查是否有活跃的筛选条件
+export function hasActiveFilters() {
+    return activeFilters.size > 0;
+}
+
 // 更新已激活筛选显示
 function updateActiveFiltersDisplay() {
     const container = document.getElementById('activeFilters');
@@ -831,6 +1067,11 @@ function updateActiveFiltersDisplay() {
             }
         });
         container._delegated = true;
+    }
+
+    // 更新搜索按钮状态
+    if (_updateSearchButtonState) {
+        _updateSearchButtonState();
     }
 }
 

@@ -18,6 +18,56 @@ async function getProxyPort() {
 }
 
 /**
+ * 设置外部代理配置（传递给 Rust 侧 reqwest）
+ * @param {string} host - 代理主机
+ * @param {number} port - 代理端口
+ * @param {string} username - 用户名（可选）
+ * @param {string} password - 密码（可选）
+ * @returns {Promise<string>} 设置结果消息
+ */
+export async function setProxyConfig(host, port, username, password) {
+    if (!isTauri()) return '非 Tauri 环境，代理设置未生效';
+    return await window.__TAURI_INTERNALS__.invoke('set_proxy_config_cmd', {
+        host: host || '',
+        port: port || 0,
+        username: username || '',
+        password: password || ''
+    });
+}
+
+/**
+ * 获取当前代理配置
+ * @returns {Promise<Object|null>} 代理配置对象或 null
+ */
+export async function getProxyConfig() {
+    if (!isTauri()) return null;
+    return await window.__TAURI_INTERNALS__.invoke('get_proxy_config_cmd');
+}
+
+/**
+ * 设置请求配置（User-Agent + 自定义 Headers）
+ * @param {string} userAgent
+ * @param {Object<string, string>} customHeaders
+ * @returns {Promise<string>} 设置结果消息
+ */
+export async function setRequestConfig(userAgent, customHeaders) {
+    if (!isTauri()) return '非 Tauri 环境，请求配置未生效';
+    return await window.__TAURI_INTERNALS__.invoke('set_request_config_cmd', {
+        userAgent: userAgent || '',
+        customHeaders: customHeaders || {}
+    });
+}
+
+/**
+ * 获取当前请求配置
+ * @returns {Promise<Object|null>}
+ */
+export async function getRequestConfig() {
+    if (!isTauri()) return null;
+    return await window.__TAURI_INTERNALS__.invoke('get_request_config_cmd');
+}
+
+/**
  * 初始化 Tauri 环境适配
  * 检测 Tauri 环境，获取 Rust 代理端口，返回 API 基础 URL
  * @returns {Promise<string>} API 基础 URL（Tauri 模式返回 'http://127.0.0.1:PORT'，Web 模式返回空字符串）

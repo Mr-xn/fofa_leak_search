@@ -1,18 +1,21 @@
 {
   "name": "fofa-leak-search",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "FOFA Leak Search - Cross-platform Desktop Application",
   "private": true,
   "scripts": {
-    "prepare:frontend": "node ./scripts/prepare-frontend.mjs",
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.9"
   }
 }

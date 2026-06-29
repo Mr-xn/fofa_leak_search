@@ -3,46 +3,186 @@
 import { state, FIELD_LABELS, STORAGE_KEYS } from './config.js';
 import { escapeHtml, formatNumber, showToast } from './utils.js';
 import { getSelectedFields } from './ui.js';
-import { fetchResults } from './search.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls } from './storage.js';
 
+// 延迟注入：打破 search.js ↔ results.js 循环依赖
+let _fetchResults = null;
+export function setFetchResults(fn) {
+    _fetchResults = fn;
+}
+
+// ==================== 列宽拖动功能 ====================
+let resizing = null;
+let startX = 0;
+let startWidth = 0;
+
+function initColumnResize() {
+    const table = document.querySelector('table');
+    if (!table) return;
+
+    // 移除旧的事件监听器
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+
+    // 添加新的事件监听器
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+}
+
+function startResize(e, th) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    resizing = th;
+    startX = e.clientX;
+    startWidth = th.offsetWidth;
+    
+    th.querySelector('.resize-handle')?.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+}
+
+function handleResize(e) {
+    if (!resizing) return;
+    
+    const diff = e.clientX - startX;
+    const newWidth = Math.max(80, startWidth + diff);
+    resizing.style.width = `${newWidth}px`;
+    resizing.style.minWidth = `${newWidth}px`;
+    resizing.style.maxWidth = `${newWidth}px`;
+    
+    // 同步调整对应列的 td 宽度
+    const thIndex = Array.from(resizing.parentElement.children).indexOf(resizing);
+    const table = resizing.closest('table');
+    if (table) {
+        table.querySelectorAll(`tbody tr td:nth-child(${thIndex + 1})`).forEach(td => {
+            td.style.maxWidth = `${newWidth}px`;
+        });
+    }
+}
+
+function stopResize() {
+    if (resizing) {
+        resizing.querySelector('.resize-handle')?.classList.remove('active');
+        resizing = null;
+    }
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+}
+
+// ==================== IPv6 地址检测 ====================
+function isIPv6(value) {
+    if (!value || typeof value !== 'string') return false;
+    // IPv6 地址包含冒号且长度较长
+    return value.includes(':') && value.length > 15;
+}
+
+function formatIPv6(value) {
+    if (!value || !isIPv6(value)) return value;
+    // 截断显示：前20个字符 + ... + 后10个字符
+    if (value.length > 30) {
+        return value.substring(0, 20) + '...' + value.substring(value.length - 10);
+    }
+    return value;
+}
+
 // ==================== 表格渲染 ====================
+// 根据字段类型估算合适的列宽
+function getColumnWidth(field, totalFields) {
+    // 当字段较少时给更宽的默认值，字段多时用紧凑宽度
+    const isCompact = totalFields > 6;
+    const widths = {
+        'ip': isCompact ? '130px' : '160px',
+        'domain': isCompact ? '140px' : '180px',
+        'host': isCompact ? '140px' : '180px',
+        'port': '70px',
+        'protocol': '80px',
+        'title': isCompact ? '160px' : '220px',
+        'link': isCompact ? '180px' : '240px',
+        'server': isCompact ? '120px' : '160px',
+        'country': isCompact ? '80px' : '100px',
+        'country_name': isCompact ? '90px' : '110px',
+        'city': isCompact ? '80px' : '100px',
+        'asn': '80px',
+        'org': isCompact ? '120px' : '160px',
+        'cert': isCompact ? '140px' : '180px',
+        'icp': isCompact ? '120px' : '150px',
+        'header': isCompact ? '140px' : '200px',
+        'body': isCompact ? '120px' : '160px',
+        'banner': isCompact ? '120px' : '160px',
+        'os': '80px',
+        'lastupdatetime': '110px',
+        'fid': '80px',
+    };
+    return widths[field] || (isCompact ? '100px' : '130px');
+}
+
 export function renderTable(fields) {
     const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
 
     thead.innerHTML = `
         <tr>
-            <th onclick="window.sortTable(-1)"># <span class="sort-icon">↕</span></th>
-            ${fields.map((field, index) => `
-                <th onclick="window.sortTable(${index})">
+            <th style="width: 50px; min-width: 50px; max-width: 50px;">
+                <span class="th-inner">#</span>
+                <div class="resize-handle"></div>
+            </th>
+            ${fields.map((field, index) => {
+                const colWidth = getColumnWidth(field, fields.length);
+                return `
+                <th onclick="window.sortTable(${index})" style="cursor: pointer; width: ${colWidth}; min-width: ${colWidth};">
                     <span class="th-inner">
                         <span class="th-label">${FIELD_LABELS[field] || field} <span class="sort-icon" id="sort-${index}">↕</span></span>
                         <span class="copy-col-btn" onclick="event.stopPropagation(); window.copyColumn(${index})" title="复制此列">📋</span>
                     </span>
+                    <div class="resize-handle" onmousedown="event.stopPropagation(); window.startColumnResize(event, this.parentElement)"></div>
                 </th>
-            `).join('')}
+                `;
+            }).join('')}
         </tr>
     `;
 
     const startIdx = (state.currentPage - 1) * parseInt(document.getElementById('pageSize').value);
     tbody.innerHTML = state.results.map((row, rowIndex) => `
         <tr>
-            <td style="color: var(--text-secondary); font-size: 12px;">${startIdx + rowIndex + 1}</td>
-            ${row.map((cell, cellIndex) => `
-                <td title="${escapeHtml(cell)}">
-                    ${formatCell(cell, fields[cellIndex])}
-                </td>
-            `).join('')}
+            <td style="color: var(--text-secondary); font-size: 12px; width: 50px; min-width: 50px; max-width: 50px;">${startIdx + rowIndex + 1}</td>
+            ${row.map((cell, cellIndex) => {
+                const field = fields[cellIndex];
+                const isIpv6 = isIPv6(cell);
+                const cellClass = field === 'ip' ? (isIpv6 ? 'ipv6-cell' : 'ip-cell') : '';
+                const displayValue = isIpv6 ? formatIPv6(cell) : cell;
+                const colWidth = getColumnWidth(field, fields.length);
+                return `
+                    <td title="${escapeHtml(cell)}" class="${cellClass}" style="max-width: ${colWidth};">
+                        ${formatCell(displayValue, field)}
+                    </td>
+                `;
+            }).join('')}
         </tr>
     `).join('');
+
+    // 初始化列宽拖动
+    initColumnResize();
 }
 
 function formatCell(value, field) {
     if (!value) return '-';
+
+    // link 字段：渲染为可点击链接，用系统默认浏览器打开
+    if (field === 'link' && /^https?:\/\//i.test(value)) {
+        const safeUrl = escapeHtml(value);
+        const displayText = value.length > 50 ? escapeHtml(value.substring(0, 47)) + '...' : safeUrl;
+        return `<a class="cell-link" href="${safeUrl}" 
+                   onclick="event.preventDefault(); event.stopPropagation(); window.openUrl('${safeUrl.replace(/'/g, "\\'")}')"
+                   title="${safeUrl}">${displayText}</a>`;
+    }
+
     return escapeHtml(value);
 }
+
+// 导出列宽拖动函数供 HTML 使用
+window.startColumnResize = startResize;
 
 // 复制指定列的所有数据到剪贴板
 export function copyColumn(columnIndex) {
@@ -179,7 +319,7 @@ export function renderPagination(pageSize) {
 export function goToPage(page) {
     if (page < 1 || state.isLoading) return;
     state.currentPage = page;
-    fetchResults();
+    if (_fetchResults) _fetchResults();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -735,6 +875,17 @@ async function fetchWithRetry(query, page, pageSize, fields, maxRetries) {
 function downloadCSV(fields, data, filename) {
     const BOM = '﻿';
     const header = fields.map(f => `"${FIELD_LABELS[f] || f}"`).join(',');
+
+    // 根据设置决定是否添加查询元数据行
+    const includeQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) === 'true';
+    let metaRow = '';
+    if (includeQuery) {
+        const queryStr = state.currentQuery || '(无)';
+        const exportTime = new Date().toLocaleString('zh-CN', { hour12: false });
+        const escapedQuery = String(queryStr).replace(/"/g, '""');
+        metaRow = `"查询: ${escapedQuery}    导出时间: ${exportTime}    条数: ${data.length}",` + fields.slice(1).map(() => '').join(',') + '\n';
+    }
+
     const rows = data.map(row =>
         row.map(cell => {
             const value = cell ?? '';
@@ -742,7 +893,7 @@ function downloadCSV(fields, data, filename) {
         }).join(',')
     );
 
-    const csvContent = BOM + header + '\n' + rows.join('\n');
+    const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

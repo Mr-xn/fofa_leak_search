@@ -1,13 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
   "productName": "FOFA Leak Search",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.fofa.leak-search",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:8000",
     "beforeDevCommand": "",
-    "beforeBuildCommand": "npm run prepare:frontend"
+    "beforeBuildCommand": "rm -rf dist/* && cp index.html dist/ && cp -r js dist/ && cp -r src-tauri/icons dist/"
   },
   "app": {
     "withGlobalTauri": true,

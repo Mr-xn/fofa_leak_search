@@ -5,8 +5,35 @@ import { showToast, formatNumber, escapeHtml, formatTime } from './utils.js';
 import { normalizeQuery } from './query-normalizer.js';
 import { addToHistory, deleteHistoryItem, getCacheKey, getFromCache, saveToCache, incrementApiCalls } from './storage.js';
 import { fetchSearchResults } from './api.js';
-import { getSelectedFields, showApiKeyModal, getFilterQuery, getActiveFiltersData } from './ui.js';
+import { getSelectedFields, showApiKeyModal, getFilterQuery, getActiveFiltersData, hasActiveFilters } from './ui.js';
 import { renderTable, renderPagination } from './results.js';
+import { loadStats } from './stats.js';
+
+// ==================== 查询可提交性判断 ====================
+/**
+ * 判断查询文本是否可以提交搜索
+ * @param {string} query - 查询文本
+ * @returns {boolean} - trim 后是否非空
+ */
+export function isSearchSubmittable(query) {
+    return !!(query && typeof query === 'string' && query.trim().length > 0);
+}
+
+/**
+ * 根据输入框内容和筛选条件更新搜索按钮的禁用状态
+ */
+export function updateSearchButtonState() {
+    const input = document.getElementById('searchInput');
+    const btn = document.querySelector('.search-btn');
+    if (!input || !btn) return;
+
+    // 输入框有内容 或 有活跃的筛选条件时，按钮可用
+    const hasInput = isSearchSubmittable(input.value);
+    const hasFilters = hasActiveFilters();
+    const canSubmit = hasInput || hasFilters;
+    btn.disabled = !canSubmit;
+    btn.classList.toggle('disabled', !canSubmit);
+}
 
 // ==================== 搜索建议 ====================
 export function showSuggestions() {
@@ -57,7 +84,7 @@ export async function doSearch() {
     const input = document.getElementById('searchInput');
     let query = input.value.trim();
 
-    if (!query) {
+    if (!isSearchSubmittable(query)) {
         showToast('请输入查询语句', 'error');
         return;
     }
@@ -113,13 +140,13 @@ export async function fetchResults() {
 
     const loading = document.getElementById('loading');
     const emptyState = document.getElementById('emptyState');
-    const tableContainer = document.getElementById('tableContainer');
+    const tableWrapper = document.getElementById('tableWrapper');
     const pagination = document.getElementById('pagination');
     const statsGrid = document.getElementById('statsGrid');
 
     loading.classList.add('show');
     emptyState.style.display = 'none';
-    tableContainer.style.display = 'none';
+    tableWrapper.style.display = 'none';
     pagination.classList.remove('show');
 
     const pageSize = document.getElementById('pageSize').value;
@@ -148,6 +175,7 @@ export async function fetchResults() {
                 loading.classList.remove('show');
                 emptyState.style.display = 'block';
                 state.isLoading = false;
+                window.dispatchEvent(new CustomEvent('searchComplete'));
                 return;
             }
 
@@ -163,6 +191,7 @@ export async function fetchResults() {
             loading.classList.remove('show');
             emptyState.style.display = 'block';
             state.isLoading = false;
+            window.dispatchEvent(new CustomEvent('searchComplete'));
             return;
         }
     }
@@ -210,6 +239,7 @@ export async function fetchResults() {
         `;
         emptyState.style.display = 'block';
         state.isLoading = false;
+        window.dispatchEvent(new CustomEvent('searchComplete'));
         return;
     }
 
@@ -217,7 +247,7 @@ export async function fetchResults() {
     renderPagination(parseInt(pageSize));
 
     loading.classList.remove('show');
-    tableContainer.style.display = 'block';
+    tableWrapper.style.display = 'block';
     pagination.classList.add('show');
 
     // 显示下载按钮
@@ -231,4 +261,11 @@ export async function fetchResults() {
     }
 
     state.isLoading = false;
+
+    // 按配置决定是否自动加载统计聚合
+    if (localStorage.getItem('fofa_auto_load_stats') === 'true') {
+        loadStats();
+    }
+
+    window.dispatchEvent(new CustomEvent('searchComplete'));
 }

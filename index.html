@@ -52,9 +52,9 @@
         }
 
         .topbar-inner {
-            max-width: 1400px;
+            width: 100%;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 0 24px;
             height: 48px;
             display: flex;
             align-items: center;
@@ -225,9 +225,10 @@
 
         /* ==================== 主容器 ==================== */
         .main {
-            max-width: 1400px;
+            width: 100%;
+            max-width: 100%;
             margin: 0 auto;
-            padding: 16px 20px 40px;
+            padding: 16px 24px 40px;
         }
 
         /* ==================== 搜索区域 ==================== */
@@ -298,6 +299,53 @@
             font-weight: 600;
             border-radius: var(--radius);
             flex-shrink: 0;
+        }
+
+        /* 复制查询按钮 */
+        .copy-query-btn {
+            padding: 0 12px;
+            min-width: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+            flex-shrink: 0;
+            font-size: 15px;
+        }
+
+        .copy-query-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .copy-query-btn:active {
+            transform: scale(0.95);
+        }
+
+        .copy-query-btn.copied {
+            color: var(--success);
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.08);
+        }
+
+        .search-btn:disabled,
+        .search-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        #statsToggleBtn:disabled,
+        #statsToggleBtn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
         }
 
         /* 搜索建议下拉 */
@@ -953,9 +1001,11 @@
             display: none;
             flex-wrap: wrap;
             gap: 5px;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid var(--border-light);
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: var(--bg);
+            border-radius: var(--radius);
+            border: 1px solid var(--border-light);
         }
 
         .active-filter-tag {
@@ -981,13 +1031,477 @@
         }
 
         .active-filter-clear {
-            background: var(--danger);
+            background: var(--error);
+            color: white;
             cursor: pointer;
             font-weight: 500;
+            border: 1px solid var(--error);
         }
 
         .active-filter-clear:hover {
-            opacity: 0.85;
+            background: #dc2626;
+            opacity: 0.9;
+        }
+
+        /* ==================== 统计聚合面板 ==================== */
+        .stats-panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .stats-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .stats-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .stats-header-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stats-content {
+            padding: 14px 16px;
+        }
+
+        .stats-loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .stats-error {
+            text-align: center;
+            padding: 16px;
+            color: var(--error);
+            font-size: 13px;
+        }
+
+        .stats-summary {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+            line-height: 1.7;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 14px;
+        }
+
+        .stats-card {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .stats-card-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            padding: 8px 12px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .stats-card-body {
+            padding: 8px 12px;
+        }
+
+        .stats-item-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 3px 0;
+            font-size: 12px;
+        }
+
+        .stats-item-row + .stats-item-row {
+            border-top: 1px solid var(--border-light);
+        }
+
+        .stats-item-bar-wrapper {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stats-item-name {
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+            font-size: 11px;
+        }
+
+        .stats-item-bar-bg {
+            height: 4px;
+            background: var(--border-light);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .stats-item-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #6366f1);
+            border-radius: 2px;
+            min-width: 2px;
+            transition: width 0.4s ease;
+        }
+
+        .stats-item-count {
+            color: var(--text);
+            font-weight: 500;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 11px;
+            white-space: nowrap;
+            min-width: 48px;
+            text-align: right;
+        }
+
+        .stats-item-percent {
+            color: var(--text-muted);
+            font-size: 10px;
+            white-space: nowrap;
+            min-width: 36px;
+            text-align: right;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ==================== 智能下载弹窗 ==================== */
+        .smart-modal {
+            width: 55vw;
+            max-width: 800px;
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
+            transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                        max-width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* 分析完成后弹窗变宽 */
+        .smart-modal.expanded {
+            width: 82vw;
+            max-width: 1200px;
+        }
+
+        .smart-modal .modal-title {
+            padding: 24px 32px 0;
+            flex-shrink: 0;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .smart-modal-body {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 20px 32px;
+            overflow-y: auto;
+        }
+
+        /* 阶段区块 */
+        .smart-phase {
+            margin-bottom: 0;
+        }
+
+        .smart-phase-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .smart-phase-title .phase-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .phase-pending { background: var(--border); color: var(--text-muted); }
+        .phase-running { background: var(--primary); color: white; animation: smartPulse 1.5s infinite; }
+        .phase-done { background: var(--success); color: white; }
+        .phase-error { background: var(--error); color: white; }
+
+        @keyframes smartPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* 分析信息卡片 */
+        .smart-info-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 18px;
+            font-size: 13px;
+            line-height: 1.8;
+            color: var(--text-secondary);
+            min-width: 0;
+        }
+
+        .smart-info-box .query-line {
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            white-space: nowrap;
+            color: var(--text);
+            background: var(--bg);
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin: 6px 0;
+            overflow-x: auto;
+        }
+
+        .smart-info-box strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* 拆分方案标题行 */
+        .smart-plan-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .smart-plan-header .smart-phase-title {
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-bottom: 0;
+        }
+
+        .smart-plan-badge {
+            font-size: 11px;
+            color: var(--primary);
+            background: var(--primary-light);
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* 方案卡片网格：2 列 */
+        .smart-plan-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .smart-plan-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
+            background: var(--card);
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .smart-plan-item.step-running {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .smart-plan-item.step-done {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.04);
+        }
+
+        .smart-plan-item.step-error {
+            border-color: var(--error);
+            background: rgba(239, 68, 68, 0.04);
+        }
+
+        .step-status-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .step-content {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .step-desc {
+            color: var(--text);
+            font-weight: 500;
+            line-height: 1.5;
+        }
+
+        .step-query {
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+        }
+
+        .step-count {
+            font-weight: 600;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            color: var(--primary);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .step-error-msg {
+            font-size: 11px;
+            color: var(--error);
+            margin-top: 3px;
+        }
+
+        /* 底部区域 */
+        .smart-bottom-section {
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+            flex-shrink: 0;
+        }
+
+        .smart-progress-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 0 0 12px;
+        }
+
+        .smart-progress-bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #6366f1);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+
+        .smart-result-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        .smart-result-card {
+            text-align: center;
+            padding: 16px 10px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .smart-result-card .num {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            letter-spacing: -0.02em;
+        }
+
+        .smart-result-card .lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* 弹窗底部按钮栏 */
+        .smart-modal .modal-actions {
+            padding: 16px 32px;
+            border-top: 1px solid var(--border);
+            margin-top: 0;
+            flex-shrink: 0;
+        }
+
+        /* 分隔线 */
+        .smart-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+
+        /* 响应式 */
+        @media (max-width: 900px) {
+            .smart-modal {
+                width: 96vw;
+                max-height: 92vh;
+            }
+            .smart-modal.expanded {
+                width: 96vw;
+                max-width: 100%;
+            }
+            .smart-modal .modal-title {
+                padding: 18px 20px 0;
+                font-size: 16px;
+            }
+            .smart-modal-body {
+                padding: 14px 20px;
+            }
+            .smart-modal .modal-actions {
+                padding: 12px 20px;
+            }
+            .smart-plan-grid {
+                grid-template-columns: 1fr;
+            }
+            .smart-result-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
         /* ==================== 结果区域 ==================== */
@@ -1114,14 +1628,59 @@
         }
 
         /* 数据表格 */
+        .table-wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+
         .table-container {
             overflow-x: auto;
+            overflow-y: visible;
+        }
+
+        /* 横向滚动右侧渐变遮罩 */
+        .table-scroll-shadow {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 36px;
+            pointer-events: none;
+            background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.07));
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .table-scroll-shadow.visible {
+            opacity: 1;
+        }
+
+        /* 自定义滚动条 */
+        .table-container::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: transparent;
+            border-radius: 3px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #cbd5e1;
         }
 
         table {
-            width: 100%;
+            width: max-content;
+            min-width: 100%;
             border-collapse: collapse;
             font-size: 13px;
+            table-layout: auto;
         }
 
         thead {
@@ -1144,6 +1703,8 @@
             white-space: nowrap;
             border-bottom: 2px solid var(--border);
             transition: background 0.15s;
+            position: relative;
+            min-width: 80px;
         }
         th .th-inner {
             display: flex;
@@ -1173,6 +1734,23 @@
             color: var(--primary);
         }
 
+        /* 列宽拖动手柄 */
+        th .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: col-resize;
+            background: transparent;
+            z-index: 1;
+        }
+
+        th .resize-handle:hover,
+        th .resize-handle.active {
+            background: var(--primary);
+        }
+
         td {
             padding: 9px 14px;
             border-bottom: 1px solid var(--border-light);
@@ -1181,6 +1759,37 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             color: var(--text);
+        }
+
+        /* IP 列特殊样式 */
+        td.ip-cell {
+            max-width: 160px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+        }
+
+        /* IPv6 地址截断显示 */
+        td.ipv6-cell {
+            max-width: 200px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+        }
+
+        /* 表格内可点击链接 */
+        .cell-link {
+            color: var(--primary);
+            text-decoration: none;
+            cursor: pointer;
+            word-break: break-all;
+        }
+
+        .cell-link:hover {
+            text-decoration: underline;
+            color: #1d4ed8;
+        }
+
+        .cell-link:active {
+            color: #1e40af;
         }
 
         tr:hover {
@@ -1328,6 +1937,7 @@
         }
 
         .modal {
+            position: relative;
             background: var(--card);
             border-radius: 16px;
             padding: 28px;
@@ -1403,6 +2013,222 @@
             justify-content: flex-end;
             gap: 8px;
             margin-top: 20px;
+        }
+
+        /* ==================== 设置弹窗 ==================== */
+        .settings-modal {
+            max-width: 520px;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .settings-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .settings-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+        }
+
+        .settings-title svg {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .modal-close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .modal-close-btn:hover {
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .settings-body {
+            padding: 8px 24px 24px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .settings-section {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .settings-section:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .settings-section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .settings-section-header svg {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .settings-section-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 0 0 12px 0;
+            line-height: 1.5;
+        }
+
+        .settings-api-row {
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .settings-api-row .modal-input-wrapper {
+            margin: 0;
+        }
+
+        .settings-api-row .btn {
+            flex-shrink: 0;
+            height: auto;
+        }
+
+        .settings-btn-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .settings-btn-row .btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            justify-content: center;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        .settings-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .settings-toggle-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+            display: block;
+        }
+
+        .settings-toggle-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: block;
+            margin-top: 2px;
+        }
+
+        .settings-proxy-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .settings-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .settings-field label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .settings-input {
+            padding: 8px 10px;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            outline: none;
+            background: var(--card);
+            color: var(--text);
+            transition: border-color 0.15s;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        }
+
+        .settings-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+        }
+
+        .settings-input::placeholder {
+            color: var(--text-muted);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .settings-textarea {
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            outline: none;
+            background: var(--card);
+            color: var(--text);
+            resize: vertical;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            line-height: 1.5;
+            transition: border-color 0.15s;
+        }
+
+        .settings-textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+        }
+
+        .settings-textarea::placeholder {
+            color: var(--text-muted);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .settings-header-errors {
+            margin-top: 6px;
+            padding: 8px 10px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #dc2626;
+            line-height: 1.5;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            white-space: pre-wrap;
         }
 
         /* ==================== 用户信息面板 ==================== */
@@ -1699,13 +2525,14 @@
             <div class="topbar-actions">
                 <button class="btn btn-ghost btn-sm" onclick="showUsageStats()" title="本月使用统计">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-                    统计
+                    用量
                 </button>
                 <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showUserInfo()">账户信息</button>
-                <button class="btn btn-ghost btn-sm" onclick="showApiKeyModal()">API 配置</button>
-                <button class="btn btn-ghost btn-sm" onclick="exportConfigToFile()" title="导出配置">配置导出</button>
-                <button class="btn btn-ghost btn-sm" onclick="importConfigFromFile()" title="导入配置">配置导入</button>
-                <span class="topbar-author" onclick="window.openUrl('https://github.com/Mr-xn')" title="GitHub" style="cursor: pointer;">
+                <button class="btn btn-ghost btn-sm" onclick="showSettingsModal()" title="设置">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    设置
+                </button>
+                <span class="topbar-author" onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search')" title="GitHub" style="cursor: pointer;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                     Mrxn
                 </span>
@@ -1729,7 +2556,13 @@
                     </button>
                     <div class="suggestions" id="suggestions"></div>
                 </div>
-                <button class="btn btn-primary search-btn" onclick="doSearch()">搜索</button>
+                <button class="btn btn-primary search-btn disabled" disabled onclick="doSearch()">搜索</button>
+                <button class="copy-query-btn" id="copyQueryBtn" onclick="copyCurrentQuery()" title="复制当前查询语句" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
             </div>
 
             <!-- 工具栏：筛选 + 字段 + 配置 + 展开 -->
@@ -1739,6 +2572,10 @@
                     <button class="btn btn-sm" id="filterToggleBtn" onclick="toggleFilters()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
                         筛选
+                    </button>
+                    <button class="btn btn-sm disabled" id="statsToggleBtn" disabled onclick="toggleStats()" title="统计概览（含协议、端口、国家等 Top 5 排名）">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        统计概览
                     </button>
                 </div>
 
@@ -1828,14 +2665,46 @@
                         <label>已选字段标签</label>
                         <div class="fields-selected-tags" id="selectedFieldsTags"></div>
                     </div>
+                    <div class="config-item">
+                        <label>统计概览</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoLoadStats">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">搜索时自动加载</span>
+                        </label>
+                        <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            开启后每次搜索自动查询统计概览（含协议、端口、国家等 Top 5 排名），会额外消耗 API 请求次数
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- 活跃筛选条件提示（始终可见） -->
+        <div class="active-filters" id="activeFilters"></div>
+
         <!-- 快速筛选面板（折叠） -->
         <div class="quick-filters" id="quickFiltersPanel" style="display: none;">
             <div class="filter-categories show" id="filterCategories"></div>
-            <div class="active-filters" id="activeFilters"></div>
+        </div>
+
+        <!-- 统计聚合面板 -->
+        <div class="stats-panel" id="statsPanel">
+            <div class="stats-header">
+                <div class="stats-header-left">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                    统计概览
+                </div>
+                <div class="stats-header-right">
+                    <button class="btn btn-sm" onclick="refreshStats()" title="刷新统计">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                        刷新
+                    </button>
+                </div>
+            </div>
+            <div class="stats-content" id="statsContent">
+                <div class="stats-loading">正在加载统计信息...</div>
+            </div>
         </div>
 
         <!-- 结果区域 -->
@@ -1868,6 +2737,7 @@
                 <div class="results-info-right" id="downloadButtons" style="display: none;">
                     <button class="btn btn-sm" onclick="downloadCurrentPage()" title="下载当前页">当前页</button>
                     <button class="btn btn-primary btn-sm" onclick="downloadAllPages()" title="下载全部">下载全部</button>
+                    <button class="btn btn-sm" id="smartDownloadBtn" onclick="openSmartDownload()" title="智能分片下载：自动拆分大查询，规避F点消耗" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border-color: transparent;">🧠 智能下载</button>
                 </div>
             </div>
 
@@ -1887,11 +2757,14 @@
             </div>
 
             <!-- 数据表格 -->
-            <div class="table-container" id="tableContainer" style="display: none;">
-                <table>
-                    <thead id="tableHead"></thead>
-                    <tbody id="tableBody"></tbody>
-                </table>
+            <div class="table-wrapper" id="tableWrapper" style="display: none;">
+                <div class="table-scroll-shadow" id="tableScrollShadow"></div>
+                <div class="table-container" id="tableContainer">
+                    <table>
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- 底部分页 -->
@@ -1899,10 +2772,150 @@
         </div>
     </div>
 
+    <!-- 设置弹窗 -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal settings-modal">
+            <div class="settings-header">
+                <h2 class="settings-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    设置
+                </h2>
+                <button class="modal-close-btn" onclick="closeSettingsModal()" title="关闭">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <div class="settings-body">
+                <!-- API 配置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>API 配置</span>
+                    </div>
+                    <p class="settings-section-desc">配置 FOFA API Key，保存在本地浏览器中</p>
+                    <div class="settings-api-row">
+                        <div class="modal-input-wrapper" style="flex: 1;">
+                            <input type="password" class="modal-input" id="settingsApiKeyInput" placeholder="请输入 API Key">
+                            <button type="button" class="toggle-password" onclick="toggleSettingsPassword()" title="显示/隐藏">
+                                <svg id="settingsEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="saveSettingsApiKey()">保存</button>
+                    </div>
+                    <a onclick="window.openUrl('https://fofa.info/userInfo')" class="link" style="font-size: 12px; cursor: pointer; margin-top: 6px; display: inline-block;">
+                        前往 FOFA 个人中心获取 API Key →
+                    </a>
+                </div>
+
+                <!-- 配置管理 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span>配置管理</span>
+                    </div>
+                    <p class="settings-section-desc">导出或导入应用配置（含 API Key、筛选条件、缓存设置等）</p>
+                    <div class="settings-btn-row">
+                        <button class="btn btn-sm" onclick="exportConfigToFile()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            导出配置
+                        </button>
+                        <button class="btn btn-sm" onclick="importConfigFromFile()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            导入配置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 导出设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span>导出设置</span>
+                    </div>
+                    <div class="settings-toggle-row">
+                        <div>
+                            <span class="settings-toggle-label">导出 CSV 时包含查询语句</span>
+                            <span class="settings-toggle-desc">在导出的 CSV 文件首行添加查询条件、导出时间等元信息</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="exportIncludeQuery">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 代理设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        <span>代理设置</span>
+                    </div>
+                    <p class="settings-section-desc">配置 HTTP/HTTPS 代理（用于通过代理访问 FOFA API）</p>
+                    <div class="settings-proxy-grid">
+                        <div class="settings-field">
+                            <label>主机地址</label>
+                            <input type="text" class="settings-input" id="proxyHost" placeholder="127.0.0.1">
+                        </div>
+                        <div class="settings-field">
+                            <label>端口</label>
+                            <input type="number" class="settings-input" id="proxyPort" placeholder="8080">
+                        </div>
+                        <div class="settings-field">
+                            <label>用户名（可选）</label>
+                            <input type="text" class="settings-input" id="proxyUsername" placeholder="可选">
+                        </div>
+                        <div class="settings-field">
+                            <label>密码（可选）</label>
+                            <input type="password" class="settings-input" id="proxyPassword" placeholder="可选">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="saveProxySettings()" style="margin-top: 10px;">保存代理设置</button>
+                </div>
+
+                <!-- 请求设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        <span>请求设置</span>
+                    </div>
+                    <p class="settings-section-desc">自定义 HTTP 请求头，发送给 FOFA API</p>
+
+                    <!-- User-Agent -->
+                    <div class="settings-field" style="margin-bottom: 12px;">
+                        <label>User-Agent</label>
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" class="settings-input" id="userAgent" placeholder="Mozilla/5.0 (compatible; FOFA-Leak-Search/1.1)" style="flex: 1;">
+                            <button class="btn btn-ghost btn-sm" onclick="resetUserAgent()" title="恢复默认" style="flex-shrink: 0;">默认</button>
+                        </div>
+                    </div>
+
+                    <!-- 自定义 Headers -->
+                    <div class="settings-field">
+                        <label>自定义 Headers</label>
+                        <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;">
+                            每行一个，格式 <code>Header-Name: value</code>。伪头部（<code>:method</code>）、<code>Host</code>、<code>Content-Length</code> 等禁止设置。
+                        </p>
+                        <textarea class="settings-textarea" id="customHeaders" rows="4" placeholder="X-From: fofa-leak-search&#10;X-Request-Id: custom-id"></textarea>
+                        <div class="settings-header-errors" id="headerErrors" style="display: none;"></div>
+                    </div>
+
+                    <button class="btn btn-primary btn-sm" onclick="saveRequestConfig()" style="margin-top: 10px;">保存请求设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- API Key 配置弹窗 -->
     <div class="modal-overlay" id="apiKeyModal">
         <div class="modal">
-            <h2 class="modal-title">API Key 配置</h2>
+            <h2 class="modal-title">API Key 配置
+                <button class="modal-close-btn" onclick="closeApiKeyModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </h2>
             <p class="modal-desc">
                 请输入您的 FOFA API Key，保存在本地浏览器中。
             </p>
@@ -1929,7 +2942,11 @@
     <!-- 缓存管理弹窗 -->
     <div class="modal-overlay" id="cacheModal">
         <div class="modal">
-            <h2 class="modal-title">缓存管理</h2>
+            <h2 class="modal-title">缓存管理
+                <button class="modal-close-btn" onclick="closeCacheModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </h2>
             <div id="cacheStats" style="margin-bottom: 16px;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div style="padding: 14px; background: var(--bg); border-radius: 8px; text-align: center;">
@@ -1971,23 +2988,39 @@
 
     <!-- 使用统计弹窗 -->
     <div class="modal-overlay" id="usageModal">
-        <div class="modal" style="max-width: 380px;">
-            <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+        <div class="modal" style="max-width: 420px;">
+            <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px; position: relative;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
                 使用统计
+                <button class="modal-close-btn" onclick="closeUsageModal()" title="关闭" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </h2>
-            <p class="modal-desc" id="usageMonth" style="margin-bottom: 20px; font-weight: 500; color: var(--text);"></p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-                <div style="text-align: center; padding: 16px 8px; background: var(--bg); border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: var(--primary);" id="usageApiCalls">0</div>
+            <p class="modal-desc" id="usageMonth" style="margin-bottom: 16px; font-weight: 500; color: var(--text);"></p>
+
+            <!-- 数据获取量配额 -->
+            <div style="padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text);">📦 月度数据获取量</span>
+                    <span style="font-size: 20px; font-weight: 700; color: var(--primary);" id="usageDataCount">0</span>
+                </div>
+                <div style="height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                    <div id="usageQuotaBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), #6366f1); border-radius: 3px; transition: width 0.4s ease; width: 0%;"></div>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);" id="usageQuotaText">加载中...</div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <div style="text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 8px;">
+                    <div style="font-size: 22px; font-weight: 700; color: var(--primary);" id="usageApiCalls">0</div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">API 调用</div>
                 </div>
-                <div style="text-align: center; padding: 16px 8px; background: var(--bg); border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: var(--success);" id="usageDownloads">0</div>
+                <div style="text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 8px;">
+                    <div style="font-size: 22px; font-weight: 700; color: var(--success);" id="usageDownloads">0</div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">下载次数</div>
                 </div>
-                <div style="text-align: center; padding: 16px 8px; background: var(--bg); border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: var(--warning);" id="usageFPoints">0</div>
+                <div style="text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 8px;">
+                    <div style="font-size: 22px; font-weight: 700; color: var(--warning);" id="usageFPoints">0</div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">消耗 F点</div>
                 </div>
             </div>
@@ -1999,16 +3032,18 @@
 
     <!-- 关于弹窗 -->
     <div class="modal-overlay" id="aboutModal">
-        <div class="modal" style="max-width: 380px;">
+        <div class="modal" style="max-width: 380px; position: relative;">
+            <button class="modal-close-btn" onclick="closeAboutModal()" title="关闭" style="position: absolute; right: 20px; top: 20px; z-index: 1;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
             <div class="about-content">
                 <div class="about-logo">
                     <img src="icons/128x128.png" alt="FOFA Leak Search">
                 </div>
                 <div class="about-name">FOFA Leak Search</div>
-                <div class="about-version">v1.0.0</div>
+                <div class="about-version">v1.1.0</div>
                 <div class="about-info">
-                    <div>作者：<strong>Mrxn</strong></div>
-                    <div><a onclick="window.openUrl('https://github.com/Mr-xn')" style="cursor:pointer">GitHub 主页 ↗</a></div>
+                    <div>作者：<a onclick="window.openUrl('https://github.com/Mr-xn')" style="cursor:pointer"><strong>Mrxn</strong> ↗</a></div>
                     <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search')" style="cursor:pointer">项目仓库 ↗</a></div>
                     <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search/issues')" style="cursor:pointer">问题反馈 ↗</a></div>
                     <div>数据来源：<a onclick="window.openUrl('https://fofa.info')" style="cursor:pointer">FOFA</a></div>
@@ -2045,6 +3080,79 @@
                 <div class="download-progress-bar" id="downloadProgressBar"></div>
             </div>
             <div class="download-progress-info" id="downloadInfo">0 / 0 页</div>
+        </div>
+    </div>
+
+    <!-- 智能下载弹窗 -->
+    <div class="modal-overlay" id="smartDownloadModal">
+        <div class="modal smart-modal" id="smartModalEl">
+            <h2 class="modal-title">智能分片下载</h2>
+
+            <div class="smart-modal-body">
+                <!-- 阶段 1：查询分析 -->
+                <div class="smart-phase" id="smartPhaseAnalyze">
+                    <div class="smart-phase-title">
+                        <span class="phase-icon phase-pending" id="smartPhaseAnalyzeIcon">1</span>
+                        查询分析
+                    </div>
+                    <div class="smart-info-box" id="smartAnalyzeInfo">
+                        点击「开始分析」统计当前查询的数据分布
+                    </div>
+                </div>
+
+                <!-- 阶段 2：拆分方案（分析完成后显示） -->
+                <div class="smart-phase" id="smartPhasePlan" style="display: none;">
+                    <div class="smart-plan-header">
+                        <div class="smart-phase-title" style="margin-bottom: 0;">
+                            <span class="phase-icon phase-running" id="smartPhasePlanIcon">2</span>
+                            拆分方案
+                        </div>
+                        <span class="smart-plan-badge" id="smartPlanBadge"></span>
+                    </div>
+                    <div class="smart-plan-grid" id="smartPlanGrid"></div>
+                </div>
+
+                <!-- 阶段 3：执行下载 -->
+                <div class="smart-phase" id="smartPhaseExecute" style="display: none;">
+                    <div class="smart-phase-title">
+                        <span class="phase-icon phase-pending" id="smartPhaseExecuteIcon">3</span>
+                        执行下载
+                    </div>
+                    <div class="smart-progress-bar">
+                        <div class="smart-progress-bar-inner" id="smartProgressBar"></div>
+                    </div>
+                    <div class="smart-info-box" id="smartExecuteInfo">等待执行...</div>
+                </div>
+
+                <!-- 结果摘要 -->
+                <div id="smartResultSummary" style="display: none;">
+                    <div class="smart-result-summary">
+                        <div class="smart-result-card">
+                            <div class="num" style="color: var(--primary);" id="smartTotalFetched">0</div>
+                            <div class="lbl">总获取</div>
+                        </div>
+                        <div class="smart-result-card">
+                            <div class="num" style="color: var(--success);" id="smartUniqueCount">0</div>
+                            <div class="lbl">去重后</div>
+                        </div>
+                        <div class="smart-result-card">
+                            <div class="num" style="color: var(--warning);" id="smartDuplicateCount">0</div>
+                            <div class="lbl">重复数</div>
+                        </div>
+                        <div class="smart-result-card">
+                            <div class="num" style="color: var(--text);" id="smartStepsInfo">0/0</div>
+                            <div class="lbl">完成步骤</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeSmartDownload()">关闭</button>
+                <button class="btn btn-primary" id="smartStartBtn" onclick="startSmartDownload()">开始分析</button>
+                <button class="btn btn-primary" id="smartExecuteBtn" onclick="executeSmartDownload()" style="display: none;">执行下载</button>
+                <button class="btn btn-primary" id="smartExportBtn" onclick="exportSmartResults()" style="display: none;">导出 CSV</button>
+            </div>
         </div>
     </div>
 

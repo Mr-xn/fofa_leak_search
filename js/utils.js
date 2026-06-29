@@ -1,5 +1,7 @@
 // js/utils.js - 工具函数
 
+import { STORAGE_KEYS } from './config.js';
+
 // ==================== Toast 提示 ====================
 export function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
@@ -55,8 +57,8 @@ export function debounce(func, wait) {
 
 // ==================== 缓存时间格式化 ====================
 export function formatCacheExpiry() {
-    const value = parseInt(localStorage.getItem('fofa_cache_time_value') || '1');
-    const unit = localStorage.getItem('fofa_cache_time_unit') || 'days';
+    const value = parseInt(localStorage.getItem(STORAGE_KEYS.cacheTimeValue) || '1');
+    const unit = localStorage.getItem(STORAGE_KEYS.cacheTimeUnit) || 'days';
     const unitNames = {
         'hours': '小时',
         'days': '天',
@@ -67,8 +69,8 @@ export function formatCacheExpiry() {
 
 // ==================== 获取缓存过期时间（毫秒）====================
 export function getCacheExpiry() {
-    const value = parseInt(localStorage.getItem('fofa_cache_time_value') || '1');
-    const unit = localStorage.getItem('fofa_cache_time_unit') || 'days';
+    const value = parseInt(localStorage.getItem(STORAGE_KEYS.cacheTimeValue) || '1');
+    const unit = localStorage.getItem(STORAGE_KEYS.cacheTimeUnit) || 'days';
 
     switch (unit) {
         case 'hours': return value * 60 * 60 * 1000;

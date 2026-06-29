@@ -329,12 +329,17 @@ export function getUsageStats() {
         const key = getUsageKey();
         const data = localStorage.getItem(key);
         if (data) {
-            return JSON.parse(data);
+            const parsed = JSON.parse(data);
+            // 兼容旧数据：确保 dataCount 字段存在
+            if (parsed.dataCount === undefined) {
+                parsed.dataCount = 0;
+            }
+            return parsed;
         }
     } catch (e) {
         // 静默处理
     }
-    return { apiCalls: 0, downloads: 0, fPoints: 0 };
+    return { apiCalls: 0, downloads: 0, fPoints: 0, dataCount: 0 };
 }
 
 // 递增 API 调用次数（带 F 点）
@@ -356,6 +361,18 @@ export function incrementDownloads() {
         const key = getUsageKey();
         const stats = getUsageStats();
         stats.downloads += 1;
+        localStorage.setItem(key, JSON.stringify(stats));
+    } catch (e) {
+        // 静默处理
+    }
+}
+
+// 递增当月数据获取量
+export function incrementDataCount(count) {
+    try {
+        const key = getUsageKey();
+        const stats = getUsageStats();
+        stats.dataCount = (stats.dataCount || 0) + count;
         localStorage.setItem(key, JSON.stringify(stats));
     } catch (e) {
         // 静默处理

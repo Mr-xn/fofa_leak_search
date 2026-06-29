@@ -37,10 +37,17 @@ export const STORAGE_KEYS = {
     pageSize: 'fofa_page_size',
     dataRange: 'fofa_data_range',       // 合并原 timeRange + resultMode
     timeRange: 'fofa_time_range',        // 保留兼容旧配置
-    resultMode: 'fofa_result_mode',      // 保留兼容旧配置
     activeFilters: 'fofa_active_filters',
+    autoLoadStats: 'fofa_auto_load_stats',  // 搜索时自动加载统计概览
     usage: 'fofa_usage',  // 月度使用统计
-    downloadRange: 'fofa_download_range'  // 下载页码范围设置
+    downloadRange: 'fofa_download_range',  // 下载页码范围设置
+    exportIncludeQuery: 'fofa_export_include_query',  // 导出 CSV 时包含查询语句
+    proxyHost: 'fofa_proxy_host',       // 代理主机
+    proxyPort: 'fofa_proxy_port',       // 代理端口
+    proxyUsername: 'fofa_proxy_username', // 代理用户名
+    proxyPassword: 'fofa_proxy_password', // 代理密码
+    userAgent: 'fofa_user_agent',        // 自定义 User-Agent
+    customHeaders: 'fofa_custom_headers'  // 自定义请求 Headers (JSON)
 };
 
 // ==================== 默认选中字段 ====================
@@ -62,8 +69,8 @@ export const FILTERS_CONFIG = {
     ],
     // 基础类 - 布尔类型
     generalBool: [
-        { key: 'is_domain', label: '有域名', trueLabel: '有域名', falseLabel: '无域名', level: 0 },
-        { key: 'is_ipv6', label: 'IPv6', trueLabel: '是 IPv6', falseLabel: '是 IPv4', level: 0 }
+        { key: 'is_domain', label: '域名', trueLabel: '有域名', falseLabel: '无域名', level: 0 },
+        { key: 'is_ipv6', label: 'IP 版本', trueLabel: '是 IPv6', falseLabel: '是 IPv4', level: 0 }
     ],
     // 标记类（Special Label）
     labels: [
@@ -106,7 +113,7 @@ export const FILTERS_CONFIG = {
     ],
     // 证书类（Certificate）- 布尔类型
     certBool: [
-        { key: 'cert.is_valid', label: '证书有效', trueLabel: '有效', falseLabel: '无效', level: 1, desc: '个人版+' },
+        { key: 'cert.is_valid', label: '证书状态', trueLabel: '有效', falseLabel: '无效', level: 1, desc: '个人版+' },
         { key: 'cert.is_match', label: '证书匹配', trueLabel: '匹配', falseLabel: '不匹配', level: 1, desc: '个人版+' },
         { key: 'cert.is_expired', label: '证书过期', trueLabel: '已过期', falseLabel: '未过期', level: 1, desc: '个人版+' },
         { key: 'cert.is_equal', label: '颁发者=持有者', trueLabel: '相同', falseLabel: '不同', level: 1, desc: '个人版+' }
@@ -148,6 +155,22 @@ export const VIP_LEVEL_MAP = {
     3: '专业版',
     4: '商业版',
     5: '企业版V2'
+};
+
+// ==================== 智能下载配额配置 ====================
+// 单次智能下载硬性上限（条数）
+export const SMART_DOWNLOAD_HARD_LIMIT = 50000;
+
+// 各等级月度数据获取配额
+// key: vip_level, value: 月度最大获取数据量
+// 永久高级会员 (level 2) 视为无限制
+export const VIP_MONTHLY_DATA_QUOTA = {
+    0: 3000,          // 注册用户: 3,000 条/月
+    1: 100000,        // 个人版: 100,000 条/月
+    2: Infinity,      // 高级会员(永久): 无限制
+    3: 800000,        // 专业版: 800,000 条/月
+    4: 9000000,       // 商业版: 9,000,000 条/月
+    5: 50000000       // 企业版V2: 50,000,000 条/月
 };
 
 // ==================== 字段权限配置 ====================
