@@ -5,10 +5,10 @@
   "identifier": "com.fofa.leak-search",
 
   "build": {
-    "frontendDist": "..",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:8000",
     "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "beforeBuildCommand": "npm run prepare-dist"
   },
 
   "app": {
