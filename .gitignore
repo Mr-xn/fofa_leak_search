@@ -54,8 +54,7 @@ scripts/prepare-frontend.sh
 FOFA_API_Documentation.md
 vitest.config.js
 
-js/search.test.js
-js/stats.test.js
+frontend/js/*.test.js
 
 # =========================
 # Internal Tool State
