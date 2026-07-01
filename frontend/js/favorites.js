@@ -278,12 +278,14 @@ function _aggregateTags(favorites) {
  */
 function _renderChips(tags) {
     const chipsEl = document.getElementById('favChips');
+    const actionsEl = document.getElementById('favChipsActions');
     if (!chipsEl) return;
 
     // 无可用标签时隐藏整行
     if (!tags.length) {
         chipsEl.innerHTML = '';
         chipsEl.style.display = 'none';
+        if (actionsEl) actionsEl.style.display = 'none';
         return;
     }
     chipsEl.style.display = '';
@@ -294,6 +296,14 @@ function _renderChips(tags) {
     ).join('');
 
     chipsEl.innerHTML = allChip + tagChips;
+    chipsEl.classList.remove('expanded');
+
+    // 显示展开/收起按钮（标签超过可显示行数时才有意义）
+    if (actionsEl) {
+        actionsEl.style.display = tags.length > 4 ? '' : 'none';
+        const toggle = actionsEl.querySelector('.fav-chips-toggle');
+        if (toggle) toggle.textContent = '展开 ▼';
+    }
 }
 
 /**

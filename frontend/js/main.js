@@ -1128,6 +1128,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!chip) return;
             const searchText = document.getElementById('favSearchInput')?.value || '';
             setActiveFavTag(chip.dataset.tag || null, searchText);
+            // 选择标签后自动折叠 chip 行
+            favChips.classList.remove('expanded');
+            const toggle = document.getElementById('favChipsToggle');
+            if (toggle) toggle.textContent = '展开 ▼';
+        });
+    }
+
+    // 标签行展开/收起切换
+    const favChipsToggle = document.getElementById('favChipsToggle');
+    if (favChipsToggle) {
+        favChipsToggle.addEventListener('click', () => {
+            const chips = document.getElementById('favChips');
+            if (!chips) return;
+            const expanded = chips.classList.toggle('expanded');
+            favChipsToggle.textContent = expanded ? '收起 ▲' : '展开 ▼';
         });
     }
 
