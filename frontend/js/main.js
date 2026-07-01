@@ -568,6 +568,40 @@ async function _showTagPopover(anchor, entry, idx) {
         popover.appendChild(opt);
     });
 
+    // 分隔线 + 自定义标签输入
+    const divider = document.createElement('div');
+    divider.className = 'fav-tag-popover-divider';
+    popover.appendChild(divider);
+
+    const customRow = document.createElement('div');
+    customRow.className = 'fav-tag-custom-row';
+    customRow.innerHTML = `
+        <input type="text" class="fav-tag-custom-input" placeholder="新建分组…" maxlength="20">
+        <button class="fav-tag-custom-add" title="添加">+</button>`;
+    popover.appendChild(customRow);
+
+    const customInput = customRow.querySelector('.fav-tag-custom-input');
+    const customAdd = customRow.querySelector('.fav-tag-custom-add');
+
+    const addCustomTag = () => {
+        const name = customInput.value.trim();
+        if (!name) return;
+        // 添加自定义标签到当前收藏
+        const newTags = [...currentTags, name];
+        updateFavoriteTags(entry.baseQuery, newTags);
+        const searchText = document.getElementById('favSearchInput')?.value || '';
+        renderFavoritesList(searchText);
+        popover.remove();
+        document.removeEventListener('click', closeHandler);
+    };
+    customAdd.addEventListener('click', addCustomTag);
+    customInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addCustomTag();
+        }
+    });
+
     // 点击外部关闭
     const closeHandler = (e) => {
         if (!popover.contains(e.target) && e.target !== anchor) {

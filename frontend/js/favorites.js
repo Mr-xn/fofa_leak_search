@@ -91,7 +91,8 @@ export function getFavorites(filterText) {
     const keyword = filterText.trim().toLowerCase();
     return state.favorites.filter(f =>
         f.baseQuery.toLowerCase().includes(keyword) ||
-        f.query.toLowerCase().includes(keyword)
+        f.query.toLowerCase().includes(keyword) ||
+        (f.name && f.name.toLowerCase().includes(keyword))
     );
 }
 

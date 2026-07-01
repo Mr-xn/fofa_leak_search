@@ -299,7 +299,8 @@ function getConfigObject() {
             proxyUsername: localStorage.getItem(STORAGE_KEYS.proxyUsername) || '',
             proxyPassword: localStorage.getItem(STORAGE_KEYS.proxyPassword) || '',
             userAgent: localStorage.getItem(STORAGE_KEYS.userAgent) || '',
-            customHeaders: localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}'
+            customHeaders: localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}',
+            favorites: localStorage.getItem(STORAGE_KEYS.favorites) || '[]'
         }
     };
 }
@@ -387,6 +388,21 @@ function applyConfig(config, source) {
     } else if (data.timeRange !== undefined) {
         // 旧配置迁移：空字符串映射为 default，其他保留
         localStorage.setItem(STORAGE_KEYS.dataRange, data.timeRange || 'default');
+    }
+
+    // 恢复用户收藏（仅非系统规则，内置规则由 seedSystemRules 重建）
+    if (data.favorites) {
+        try {
+            const imported = JSON.parse(data.favorites);
+            const userFavs = imported.filter(f => !f.system);
+            // 确保每条用户收藏有 tags 字段（兼容旧导出）
+            userFavs.forEach(f => { if (!f.tags) f.tags = ['用户']; });
+            const currentSystem = (() => {
+                try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.favorites) || '[]').filter(f => f.system); }
+                catch { return []; }
+            })();
+            localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify([...userFavs, ...currentSystem]));
+        } catch { /* 静默处理无效数据 */ }
     }
 
     showToast(`配置从 ${source} 导入成功，页面将刷新`, 'success');
