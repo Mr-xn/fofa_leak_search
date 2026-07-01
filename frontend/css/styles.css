@@ -2527,7 +2527,7 @@ tr:last-child td {
         display: flex;
         flex-direction: column;
         padding: 0;
-        max-width: 560px;
+        max-width: 672px;
         max-height: 88vh;
         overflow: hidden;
         border-radius: 16px;
@@ -2615,9 +2615,33 @@ tr:last-child td {
         gap: 6px;
         padding: 12px 22px 4px;
         min-height: 0;
+        max-height: 64px;
+        overflow-y: auto;
+        transition: max-height 0.25s ease;
+    }
+    .fav-chips.expanded {
+        max-height: none;
     }
     .fav-chips:empty {
         display: none;
+    }
+    .fav-chips-actions {
+        flex-shrink: 0;
+        padding: 0 22px 4px;
+    }
+    .fav-chips-toggle {
+        background: none;
+        border: none;
+        font-size: 11px;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+    .fav-chips-toggle:hover {
+        color: var(--primary);
+        background: var(--primary-light);
     }
     .fav-chip {
         display: inline-flex;
