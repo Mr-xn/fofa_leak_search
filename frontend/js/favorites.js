@@ -24,6 +24,9 @@ function persistFavorites() {
 export function addFavorite(baseQuery, filtersData, mergedQuery) {
     if (!baseQuery || !baseQuery.trim()) return;
 
+    // 去重前保留旧的 name 和 tags（如果有自定义设置）
+    const existing = state.favorites.find(f => f.baseQuery === baseQuery && !f.system);
+
     // 去重：移除相同 baseQuery 的旧条目
     state.favorites = state.favorites.filter(f => f.baseQuery !== baseQuery);
 
@@ -31,6 +34,8 @@ export function addFavorite(baseQuery, filtersData, mergedQuery) {
     state.favorites.unshift({
         query: mergedQuery,
         baseQuery: baseQuery,
+        name: (existing && existing.name) || '',
+        tags: (existing && existing.tags) || ['用户'],
         filters: filtersData || null,
         time: new Date().toISOString()
     });
@@ -65,6 +70,16 @@ export function isFavorite(baseQuery) {
 }
 
 /**
+ * 判断 baseQuery 是否属于内置（系统）规则
+ * @param {string} baseQuery
+ * @returns {boolean}
+ */
+export function isSystemFavorite(baseQuery) {
+    if (!baseQuery) return false;
+    return state.favorites.some(f => f.system === true && f.baseQuery === baseQuery);
+}
+
+/**
  * 获取收藏列表
  * @param {string} [filterText] - 可选的过滤文本（模糊匹配）
  * @returns {Array}
@@ -90,6 +105,9 @@ export function getFavorites(filterText) {
 export function toggleFavorite(baseQuery, filtersData, mergedQuery) {
     if (!baseQuery || !baseQuery.trim()) return 'noop';
 
+    // 系统规则不可切换收藏
+    if (isSystemFavorite(baseQuery)) return 'noop';
+
     if (isFavorite(baseQuery)) {
         removeFavorite(baseQuery);
         return 'removed';
@@ -105,6 +123,38 @@ export function toggleFavorite(baseQuery, filtersData, mergedQuery) {
 export function clearAllFavorites() {
     state.favorites = state.favorites.filter(f => f.system === true);
     persistFavorites();
+}
+
+/**
+ * 更新用户收藏的别名
+ * @param {string} baseQuery
+ * @param {string} newName
+ * @returns {boolean}
+ */
+export function updateFavoriteName(baseQuery, newName) {
+    if (!baseQuery || !newName || !newName.trim()) return false;
+    const fav = state.favorites.find(f => f.baseQuery === baseQuery);
+    if (!fav || fav.system) return false;
+    fav.name = newName.trim();
+    persistFavorites();
+    return true;
+}
+
+/**
+ * 更新用户收藏的标签（始终保留 "用户" 标签）
+ * @param {string} baseQuery
+ * @param {string[]} tags
+ * @returns {boolean}
+ */
+export function updateFavoriteTags(baseQuery, tags) {
+    if (!baseQuery) return false;
+    const fav = state.favorites.find(f => f.baseQuery === baseQuery);
+    if (!fav || fav.system) return false;
+    // 始终包含 '用户'，去重
+    const merged = ['用户', ...(tags || []).filter(t => t !== '用户')];
+    fav.tags = [...new Set(merged)];
+    persistFavorites();
+    return true;
 }
 
 // ==================== 系统规则播种 ====================
@@ -211,6 +261,24 @@ function _renderChips(tags) {
 }
 
 /**
+ * 渲染用户收藏的标签 chips
+ * @param {object} fav - 收藏条目
+ * @param {number} index - 渲染索引
+ * @returns {string}
+ */
+function _renderUserTags(fav, index) {
+    const tags = Array.isArray(fav.tags) ? fav.tags : ['用户'];
+    if (tags.length === 0) return '';
+    const chips = tags.map(t => `<span class="fav-tag-chip" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</span>`).join('');
+    return `<div class="fav-user-tags">
+        ${chips}
+        <button class="fav-tag-add" data-tag-index="${index}" title="编辑标签分组">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+    </div>`;
+}
+
+/**
  * 渲染收藏列表 HTML
  * @param {string} [filterText] - 可选的过滤文本
  */
@@ -276,7 +344,17 @@ export function renderFavoritesList(filterText) {
         return `
         <div class="fav-item" data-index="${i}"${delay}>
             <div class="fav-item-main">
+                <div class="fav-name-row">
+                    <span class="fav-name" data-name-index="${i}" title="点击编辑别名">${escapeHtml(f.name || f.baseQuery)}</span>
+                    <button class="fav-edit-btn" data-edit-index="${i}" title="编辑别名">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
+                </div>
                 <span class="fav-query" title="${escapeHtml(f.query)}">${escapeHtml(f.query)}</span>
+                ${_renderUserTags(f, i)}
                 <span class="fav-time">${formatTime(f.time)}</span>
             </div>
             <div class="fav-item-actions">
@@ -391,6 +469,15 @@ export function updateFavoriteButtonState() {
     const input = document.getElementById('searchInput');
     const baseQuery = input ? input.value.trim() : '';
 
+    if (baseQuery && isSystemFavorite(baseQuery)) {
+        btn.classList.add('builtin');
+        btn.classList.remove('favorited');
+        btn.title = '内置规则，不可取消收藏';
+        return;
+    }
+
+    btn.classList.remove('builtin');
+
     if (baseQuery && isFavorite(baseQuery)) {
         btn.classList.add('favorited');
         btn.title = '取消收藏';
@@ -410,6 +497,12 @@ export function handleFavoriteClick() {
     if (!baseQuery) {
         // 无查询：打开收藏面板
         toggleFavoritesPanel();
+        return;
+    }
+
+    // 内置规则不可切换收藏
+    if (isSystemFavorite(baseQuery)) {
+        showToast('内置规则，不可取消收藏', 'info');
         return;
     }
 

@@ -17,7 +17,7 @@ import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownlo
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
 import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
-import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag } from './favorites.js';
+import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter } from './icon-hash.js';
 import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
@@ -95,6 +95,9 @@ window.isFavorite = isFavorite;
 window.updateFavoriteButtonState = updateFavoriteButtonState;
 window.handleFavoriteClick = handleFavoriteClick;
 window.updateFavCount = updateFavCount;
+window.isSystemFavorite = isSystemFavorite;
+window.updateFavoriteName = updateFavoriteName;
+window.updateFavoriteTags = updateFavoriteTags;
 window.manualCheckUpdate = manualCheckUpdate;
 window.saveAutoCheckUpdate = saveAutoCheckUpdate;
 window.showIconHashModal = showIconHashModal;
@@ -487,7 +490,96 @@ window.copyCurrentQuery = () => {
     });
 };
 
-// ==================== 初始化 ====================
+// ==================== 收藏 UI 辅助函数 ====================
+
+/**
+ * 启动内联名称编辑模式
+ * @param {number} idx - 渲染索引
+ * @param {object} entry - 收藏条目
+ * @param {HTMLElement} editBtn - 编辑按钮元素
+ */
+function _startInlineNameEdit(idx, entry, editBtn) {
+    const nameEl = document.querySelector(`.fav-name[data-name-index="${idx}"]`);
+    if (!nameEl) return;
+    const nameRow = nameEl.parentElement;
+    const currentName = entry.name || '';
+    nameRow.innerHTML = `
+        <div class="fav-name-edit-row" data-name-edit-index="${idx}">
+            <input type="text" class="fav-name-input" value="${escapeHtml(currentName)}" placeholder="${escapeHtml(entry.baseQuery)}">
+            <button class="fav-name-save" title="保存">✓</button>
+            <button class="fav-name-cancel" title="取消">✕</button>
+        </div>`;
+    const input = nameRow.querySelector('.fav-name-input');
+    if (input) {
+        input.focus();
+        input.select();
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const newName = input.value.trim();
+                if (newName) {
+                    updateFavoriteName(entry.baseQuery, newName);
+                    const searchText = document.getElementById('favSearchInput')?.value || '';
+                    renderFavoritesList(searchText);
+                    showToast('别名已更新', 'success');
+                }
+            } else if (e.key === 'Escape') {
+                const searchText = document.getElementById('favSearchInput')?.value || '';
+                renderFavoritesList(searchText);
+            }
+        });
+    }
+}
+
+/**
+ * 显示标签选择 popover
+ * @param {HTMLElement} anchor - 锚点按钮
+ * @param {object} entry - 收藏条目
+ * @param {number} idx - 渲染索引
+ */
+async function _showTagPopover(anchor, entry, idx) {
+    // 移除已有的 popover
+    const existing = document.querySelector('.fav-tag-popover');
+    if (existing) existing.remove();
+
+    const currentTags = entry.tags || ['用户'];
+    const popover = document.createElement('div');
+    popover.className = 'fav-tag-popover';
+    popover.dataset.baseQuery = entry.baseQuery;
+    popover.dataset.index = idx;
+    popover.innerHTML = '<div class="fav-tag-popover-title">选择分组标签</div>';
+
+    // 收集所有 FOFA_RULES 中的标签，去重排序
+    const allTags = new Set();
+    try {
+        const { FOFA_RULES } = await import('./fofa-rules.js');
+        FOFA_RULES.forEach(r => {
+            if (Array.isArray(r.tags)) r.tags.forEach(t => allTags.add(t));
+        });
+    } catch {}
+    const sortedTags = [...allTags].sort();
+
+    sortedTags.forEach(tag => {
+        const isActive = currentTags.includes(tag);
+        const opt = document.createElement('button');
+        opt.className = `fav-tag-option${isActive ? ' is-active' : ''}`;
+        opt.dataset.tag = tag;
+        opt.textContent = `#${tag}`;
+        popover.appendChild(opt);
+    });
+
+    // 点击外部关闭
+    const closeHandler = (e) => {
+        if (!popover.contains(e.target) && e.target !== anchor) {
+            popover.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+
+    // 定位并插入
+    anchor.parentElement.appendChild(popover);
+}
 document.addEventListener('DOMContentLoaded', async () => {
     // 设置搜索按钮更新函数（用于筛选条件变化时更新按钮状态）
     setSearchButtonUpdater(updateSearchButtonState);
@@ -837,7 +929,75 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (entry) fillFromFavorite(entry);
                 return;
             }
-            // 删除按钮
+            // 编辑按钮 — 内联编辑别名
+            const editBtn = e.target.closest('.fav-edit-btn');
+            if (editBtn) {
+                e.stopPropagation();
+                const idx = parseInt(editBtn.dataset.editIndex, 10);
+                const entry = getRenderedFavorite(idx);
+                if (entry && !entry.system) {
+                    _startInlineNameEdit(idx, entry, editBtn);
+                }
+                return;
+            }
+            // 保存/取消内联编辑（事件委托在列表上）
+            const saveBtn = e.target.closest('.fav-name-save');
+            const cancelBtn = e.target.closest('.fav-name-cancel');
+            if (saveBtn || cancelBtn) {
+                e.stopPropagation();
+                const row = e.target.closest('.fav-name-edit-row');
+                const idx = parseInt(row?.dataset.nameEditIndex, 10);
+                if (saveBtn && row) {
+                    const input = row.querySelector('.fav-name-input');
+                    const newName = input ? input.value.trim() : '';
+                    const entry = getRenderedFavorite(idx);
+                    if (entry && newName) {
+                        updateFavoriteName(entry.baseQuery, newName);
+                        const searchText = document.getElementById('favSearchInput')?.value || '';
+                        renderFavoritesList(searchText);
+                        showToast('别名已更新', 'success');
+                    }
+                } else if (cancelBtn) {
+                    const searchText = document.getElementById('favSearchInput')?.value || '';
+                    renderFavoritesList(searchText);
+                }
+                return;
+            }
+            // 标签 "+" 按钮 — 打开标签选择 popover
+            const tagAddBtn = e.target.closest('.fav-tag-add');
+            if (tagAddBtn) {
+                e.stopPropagation();
+                const idx = parseInt(tagAddBtn.dataset.tagIndex, 10);
+                const entry = getRenderedFavorite(idx);
+                if (entry && !entry.system) {
+                    _showTagPopover(tagAddBtn, entry, idx);
+                }
+                return;
+            }
+            // 标签 popover 内点击 — toggle 标签
+            const tagOption = e.target.closest('.fav-tag-option');
+            if (tagOption) {
+                e.stopPropagation();
+                const tag = tagOption.dataset.tag;
+                const popover = tagOption.closest('.fav-tag-popover');
+                const baseQuery = popover?.dataset.baseQuery;
+                if (baseQuery && tag) {
+                    const entry = getRenderedFavorite(
+                        parseInt(popover.dataset.index, 10)
+                    );
+                    if (entry) {
+                        const currentTags = entry.tags || ['用户'];
+                        const hasTag = currentTags.includes(tag);
+                        const newTags = hasTag
+                            ? currentTags.filter(t => t !== tag)
+                            : [...currentTags, tag];
+                        updateFavoriteTags(baseQuery, newTags);
+                        const searchText = document.getElementById('favSearchInput')?.value || '';
+                        renderFavoritesList(searchText);
+                    }
+                }
+                return;
+            }
             const deleteBtn = e.target.closest('.fav-delete');
             if (deleteBtn) {
                 e.stopPropagation();
