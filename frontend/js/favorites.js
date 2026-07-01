@@ -229,8 +229,20 @@ let _renderedFavorites = [];
 /** 当前激活的标签筛选（null 表示"全部"） */
 let _activeTag = null;
 
+/** 内置标签集合（惰性初始化） */
+let _builtinTags = null;
+function _getBuiltinTags() {
+    if (_builtinTags) return _builtinTags;
+    _builtinTags = new Set();
+    FOFA_RULES.forEach(r => {
+        if (Array.isArray(r.tags)) r.tags.forEach(t => _builtinTags.add(t));
+    });
+    return _builtinTags;
+}
+
 /**
- * 从收藏列表中聚合所有标签，按出现频次降序排序
+ * 从收藏列表中聚合所有标签，按出现频次降序排序。
+ * 优先展示 "用户" 标签和用户自定义标签，内置标签按频次补位。
  * @param {Array} favorites
  * @returns {Array<{tag: string, count: number}>}
  */
@@ -242,10 +254,22 @@ function _aggregateTags(favorites) {
             counts.set(t, (counts.get(t) || 0) + 1);
         }
     }
-    return Array.from(counts.entries())
-        .map(([tag, count]) => ({ tag, count }))
-        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
-        .slice(0, 10);
+    const builtin = _getBuiltinTags();
+    const all = Array.from(counts.entries()).map(([tag, count]) => ({ tag, count }));
+
+    // 分组：用户标签、自定义标签、内置标签
+    const userTag = all.find(t => t.tag === '用户');
+    const customTags = all.filter(t => t.tag !== '用户' && !builtin.has(t.tag))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    const builtinTags = all.filter(t => t.tag !== '用户' && builtin.has(t.tag))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+    // 拼接："全部" 始终在最前，"用户" 次之，自定义随后，内置补位
+    const result = [];
+    if (userTag) result.push(userTag);
+    result.push(...customTags);
+    result.push(...builtinTags);
+    return result;
 }
 
 /**

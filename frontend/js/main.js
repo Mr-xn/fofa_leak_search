@@ -547,32 +547,21 @@ async function _showTagPopover(anchor, entry, idx) {
     popover.className = 'fav-tag-popover';
     popover.dataset.baseQuery = entry.baseQuery;
     popover.dataset.index = idx;
-    popover.innerHTML = '<div class="fav-tag-popover-title">选择分组标签</div>';
 
-    // 收集所有 FOFA_RULES 中的标签，去重排序
-    const allTags = new Set();
-    try {
-        const { FOFA_RULES } = await import('./fofa-rules.js');
-        FOFA_RULES.forEach(r => {
-            if (Array.isArray(r.tags)) r.tags.forEach(t => allTags.add(t));
-        });
-    } catch {}
-    const sortedTags = [...allTags].sort();
+    // === 标题 ===
+    const title = document.createElement('div');
+    title.className = 'fav-tag-popover-title';
+    title.textContent = '选择分组标签';
+    popover.appendChild(title);
 
-    sortedTags.forEach(tag => {
-        const isActive = currentTags.includes(tag);
-        const opt = document.createElement('button');
-        opt.className = `fav-tag-option${isActive ? ' is-active' : ''}`;
-        opt.dataset.tag = tag;
-        opt.textContent = `#${tag}`;
-        popover.appendChild(opt);
-    });
+    // === 快速筛选 ===
+    const filterRow = document.createElement('div');
+    filterRow.className = 'fav-tag-filter-row';
+    filterRow.innerHTML = '<input type="text" class="fav-tag-filter-input" placeholder="筛选标签…">';
+    popover.appendChild(filterRow);
+    const filterInput = filterRow.querySelector('.fav-tag-filter-input');
 
-    // 分隔线 + 自定义标签输入
-    const divider = document.createElement('div');
-    divider.className = 'fav-tag-popover-divider';
-    popover.appendChild(divider);
-
+    // === 新建分组（顶部） ===
     const customRow = document.createElement('div');
     customRow.className = 'fav-tag-custom-row';
     customRow.innerHTML = `
@@ -583,10 +572,79 @@ async function _showTagPopover(anchor, entry, idx) {
     const customInput = customRow.querySelector('.fav-tag-custom-input');
     const customAdd = customRow.querySelector('.fav-tag-custom-add');
 
+    // === 分隔线 ===
+    const divider = document.createElement('div');
+    divider.className = 'fav-tag-popover-divider';
+    popover.appendChild(divider);
+
+    // === 标签列表容器 ===
+    const tagList = document.createElement('div');
+    tagList.className = 'fav-tag-list';
+    popover.appendChild(tagList);
+
+    // 收集所有已知标签（FOFA_RULES + 当前收藏已使用的自定义标签）
+    const allTags = new Set();
+    try {
+        const { FOFA_RULES } = await import('./fofa-rules.js');
+        FOFA_RULES.forEach(r => {
+            if (Array.isArray(r.tags)) r.tags.forEach(t => allTags.add(t));
+        });
+    } catch {}
+    // 加入当前用户所有收藏中出现的标签
+    const { state } = await import('./config.js');
+    state.favorites.forEach(f => {
+        if (!f.system && Array.isArray(f.tags)) f.tags.forEach(t => allTags.add(t));
+    });
+    const sortedTags = [...allTags].sort();
+
+    // 渲染标签选项
+    function renderTagOptions(filter) {
+        tagList.innerHTML = '';
+        const kw = (filter || '').trim().toLowerCase();
+        const filtered = kw
+            ? sortedTags.filter(t => t.toLowerCase().includes(kw))
+            : sortedTags;
+        if (filtered.length === 0) {
+            tagList.innerHTML = '<div class="fav-tag-empty">无匹配标签</div>';
+            return;
+        }
+        filtered.forEach(tag => {
+            const isActive = currentTags.includes(tag);
+            const opt = document.createElement('button');
+            opt.className = `fav-tag-option${isActive ? ' is-active' : ''}`;
+            opt.dataset.tag = tag;
+            opt.textContent = `#${tag}`;
+            tagList.appendChild(opt);
+        });
+    }
+    renderTagOptions('');
+
+    // 筛选输入实时过滤
+    filterInput.addEventListener('input', () => renderTagOptions(filterInput.value));
+
+    // === 直接事件：标签选项点击切换 ===
+    tagList.addEventListener('click', (e) => {
+        const opt = e.target.closest('.fav-tag-option');
+        if (!opt) return;
+        e.stopPropagation();
+        const tag = opt.dataset.tag;
+        const hasTag = currentTags.includes(tag);
+        const newTags = hasTag
+            ? currentTags.filter(t => t !== tag)
+            : [...currentTags, tag];
+        updateFavoriteTags(entry.baseQuery, newTags);
+        const searchText = document.getElementById('favSearchInput')?.value || '';
+        renderFavoritesList(searchText);
+        // 更新 popover 内状态而非关闭
+        currentTags.length = 0;
+        currentTags.push(...newTags);
+        renderTagOptions(filterInput.value);
+    });
+
+    // === 自定义标签添加 ===
     const addCustomTag = () => {
         const name = customInput.value.trim();
         if (!name) return;
-        // 添加自定义标签到当前收藏
         const newTags = [...currentTags, name];
         updateFavoriteTags(entry.baseQuery, newTags);
         const searchText = document.getElementById('favSearchInput')?.value || '';
@@ -611,34 +669,33 @@ async function _showTagPopover(anchor, entry, idx) {
     };
     setTimeout(() => document.addEventListener('click', closeHandler), 0);
 
-    // 挂载到 fav-modal，相对于其做绝对定位（避开 .fav-list overflow 裁剪和 .fav-item 层叠上下文）
+    // 挂载到 fav-modal
     const modal = document.querySelector('.fav-modal');
     if (!modal) { anchor.parentElement.appendChild(popover); return; }
 
     const anchorRect = anchor.getBoundingClientRect();
     const modalRect = modal.getBoundingClientRect();
-    const popoverHeight = 200; // max-height
+    const popoverHeight = 320;
 
-    // 优先放在 "+" 按钮下方，空间不够则放上方
     let top = anchorRect.bottom - modalRect.top + 4;
     if (top + popoverHeight > modalRect.height - 8) {
-        // 放上方：popover 底边紧贴 "+" 顶边
         top = anchorRect.top - modalRect.top - popoverHeight - 4;
-        if (top < 4) top = 4; // 不低于 modal 顶部
+        if (top < 4) top = 4;
     }
 
-    // 水平：与 "+" 按钮左对齐，不超出 modal 右侧
     const left = Math.min(anchorRect.left - modalRect.left, modalRect.width - 228);
-
     popover.style.top = `${top}px`;
     popover.style.left = `${left}px`;
 
     modal.appendChild(popover);
 
-    // 列表滚动时关闭 popover（避免与锚点错位）
+    // 列表滚动时关闭 popover
     const favList = document.querySelector('.fav-list');
     const onScroll = () => { popover.remove(); favList?.removeEventListener('scroll', onScroll); };
     setTimeout(() => favList?.addEventListener('scroll', onScroll, { once: true }), 0);
+
+    // 聚焦到筛选输入框
+    setTimeout(() => filterInput.focus(), 50);
 }
 document.addEventListener('DOMContentLoaded', async () => {
     // 设置搜索按钮更新函数（用于筛选条件变化时更新按钮状态）
@@ -1031,30 +1088,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const entry = getRenderedFavorite(idx);
                 if (entry && !entry.system) {
                     _showTagPopover(tagAddBtn, entry, idx);
-                }
-                return;
-            }
-            // 标签 popover 内点击 — toggle 标签
-            const tagOption = e.target.closest('.fav-tag-option');
-            if (tagOption) {
-                e.stopPropagation();
-                const tag = tagOption.dataset.tag;
-                const popover = tagOption.closest('.fav-tag-popover');
-                const baseQuery = popover?.dataset.baseQuery;
-                if (baseQuery && tag) {
-                    const entry = getRenderedFavorite(
-                        parseInt(popover.dataset.index, 10)
-                    );
-                    if (entry) {
-                        const currentTags = entry.tags || ['用户'];
-                        const hasTag = currentTags.includes(tag);
-                        const newTags = hasTag
-                            ? currentTags.filter(t => t !== tag)
-                            : [...currentTags, tag];
-                        updateFavoriteTags(baseQuery, newTags);
-                        const searchText = document.getElementById('favSearchInput')?.value || '';
-                        renderFavoritesList(searchText);
-                    }
                 }
                 return;
             }
