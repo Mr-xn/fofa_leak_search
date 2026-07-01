@@ -282,6 +282,32 @@ pub fn get_request_config(
     Ok(state.get_request_config())
 }
 
+/// 检查 GitHub 最新 release（通过已配置代理的 reqwest client）
+pub async fn check_github_update(
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let client = state.get_client();
+
+    let resp = client
+        .get("https://api.github.com/repos/Mr-xn/fofa_leak_search/releases/latest")
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "fofa-leak-search")
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API 返回: {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析失败: {}", e))?;
+
+    Ok(json)
+}
+
 // ==================== 代理服务器 ====================
 
 pub async fn start_proxy_server(state: AppState) -> (u16, broadcast::Sender<()>) {

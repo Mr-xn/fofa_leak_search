@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+#[cfg(target_os = "macos")]
 use tauri::menu::{MenuBuilder, SubmenuBuilder, PredefinedMenuItem};
 
 mod proxy;
@@ -51,6 +52,14 @@ fn get_request_config_cmd(
     state: tauri::State<'_, proxy::AppState>,
 ) -> Result<proxy::RequestConfig, String> {
     proxy::get_request_config(state)
+}
+
+/// 检查 GitHub 最新 release（经过代理）
+#[tauri::command]
+async fn check_github_update_cmd(
+    state: tauri::State<'_, proxy::AppState>,
+) -> Result<serde_json::Value, String> {
+    proxy::check_github_update(state).await
 }
 
 /// 用系统默认浏览器打开 URL（健壮版）
@@ -145,46 +154,45 @@ pub fn run() {
         })
         .manage(proxy_state)
         .setup(|app| {
-            // 创建菜单栏（macOS 需要菜单栏才能支持系统级快捷键）
-            let menu = MenuBuilder::new(app)
-                // 第一个子菜单：应用菜单（macOS 会自动放在应用名称下）
-                .item(&SubmenuBuilder::new(app, "FOFA Leak Search")
-                    .item(&PredefinedMenuItem::about(app, None, None)?)
-                    .separator()
-                    .item(&PredefinedMenuItem::hide(app, Some("Hide FOFA Leak Search"))?)  // ⌘+H
-                    .item(&PredefinedMenuItem::hide_others(app, Some("Hide Others"))?)     // ⌘+⌥+H
-                    .item(&PredefinedMenuItem::show_all(app, Some("Show All"))?)
-                    .separator()
-                    .item(&PredefinedMenuItem::quit(app, Some("Quit FOFA Leak Search"))?)  // ⌘+Q
-                    .build()?)
-                // 文件菜单
-                .item(&SubmenuBuilder::new(app, "File")
-                    .item(&PredefinedMenuItem::close_window(app, Some("Close Window"))?)  // ⌘+W
-                    .build()?)
-                // 编辑菜单
-                .item(&SubmenuBuilder::new(app, "Edit")
-                    .item(&PredefinedMenuItem::undo(app, None)?)                          // ⌘+Z
-                    .item(&PredefinedMenuItem::redo(app, None)?)                           // ⌘+⇧+Z
-                    .separator()
-                    .item(&PredefinedMenuItem::cut(app, None)?)                            // ⌘+X
-                    .item(&PredefinedMenuItem::copy(app, None)?)                           // ⌘+C
-                    .item(&PredefinedMenuItem::paste(app, None)?)                          // ⌘+V
-                    .item(&PredefinedMenuItem::select_all(app, None)?)                     // ⌘+A
-                    .build()?)
-                // 窗口菜单
-                .item(&SubmenuBuilder::new(app, "Window")
-                    .item(&PredefinedMenuItem::minimize(app, Some("Minimize"))?)           // ⌘+M
-                    .item(&PredefinedMenuItem::maximize(app, Some("Maximize"))?)
-                    .item(&PredefinedMenuItem::fullscreen(app, Some("Enter Full Screen"))?) // ⌘+⌃+F
-                    .separator()
-                    .item(&PredefinedMenuItem::bring_all_to_front(app, Some("Bring All to Front"))?)
-                    .build()?)
-                .build()?;
-
-            app.set_menu(menu)?;
+            // macOS 需要菜单栏才能支持系统级快捷键（⌘+Q, ⌘+W, ⌘+C 等）
+            // Linux/Windows 不需要原生菜单栏，窗口控件由系统窗口管理器提供
+            #[cfg(target_os = "macos")]
+            {
+                let menu = MenuBuilder::new(app)
+                    .item(&SubmenuBuilder::new(app, "FOFA Leak Search")
+                        .item(&PredefinedMenuItem::about(app, None, None)?)
+                        .separator()
+                        .item(&PredefinedMenuItem::hide(app, Some("Hide FOFA Leak Search"))?)
+                        .item(&PredefinedMenuItem::hide_others(app, Some("Hide Others"))?)
+                        .item(&PredefinedMenuItem::show_all(app, Some("Show All"))?)
+                        .separator()
+                        .item(&PredefinedMenuItem::quit(app, Some("Quit FOFA Leak Search"))?)
+                        .build()?)
+                    .item(&SubmenuBuilder::new(app, "File")
+                        .item(&PredefinedMenuItem::close_window(app, Some("Close Window"))?)
+                        .build()?)
+                    .item(&SubmenuBuilder::new(app, "Edit")
+                        .item(&PredefinedMenuItem::undo(app, None)?)
+                        .item(&PredefinedMenuItem::redo(app, None)?)
+                        .separator()
+                        .item(&PredefinedMenuItem::cut(app, None)?)
+                        .item(&PredefinedMenuItem::copy(app, None)?)
+                        .item(&PredefinedMenuItem::paste(app, None)?)
+                        .item(&PredefinedMenuItem::select_all(app, None)?)
+                        .build()?)
+                    .item(&SubmenuBuilder::new(app, "Window")
+                        .item(&PredefinedMenuItem::minimize(app, Some("Minimize"))?)
+                        .item(&PredefinedMenuItem::maximize(app, Some("Maximize"))?)
+                        .item(&PredefinedMenuItem::fullscreen(app, Some("Enter Full Screen"))?)
+                        .separator()
+                        .item(&PredefinedMenuItem::bring_all_to_front(app, Some("Bring All to Front"))?)
+                        .build()?)
+                    .build()?;
+                app.set_menu(menu)?;
+            }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, dedup::dedup_results, dedup::dedup_single])
+        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, dedup::dedup_results, dedup::dedup_single])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
