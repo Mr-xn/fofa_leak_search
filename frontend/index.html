@@ -2510,6 +2510,498 @@
             .filter-inputs {
                 grid-template-columns: 1fr;
             }
+
+            /* ========== 收藏功能样式 ========== */
+            .fav-star-btn {
+                position: relative;
+                transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+            }
+            .fav-star-btn svg {
+                transition: fill 0.3s cubic-bezier(0.32, 0.72, 0, 1), stroke 0.3s;
+            }
+            .fav-star-btn.favorited svg {
+                fill: var(--warning);
+                stroke: var(--warning);
+            }
+            .fav-star-btn:active {
+                transform: scale(0.9);
+            }
+
+            /* ========== 收藏面板样式（独立模块，自洽布局） ========== */
+            /* .fav-modal 自身是 flex column 容器，不依赖 .modal 的 grid/inline 样式 */
+            #favoritesPanel .modal.fav-modal {
+                display: flex;
+                flex-direction: column;
+                padding: 0;
+                max-width: 560px;
+                max-height: 88vh;
+                overflow: hidden;
+                border-radius: 16px;
+                box-shadow: 0 24px 64px -20px rgba(15, 23, 42, 0.35);
+            }
+            .fav-modal * {
+                box-sizing: border-box;
+            }
+
+            /* —— 头部 —— */
+            .fav-header {
+                flex-shrink: 0;
+                padding: 18px 22px 14px;
+                border-bottom: 1px solid var(--border-light);
+            }
+            .fav-title-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .fav-title-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                border-radius: 9px;
+                background: var(--primary-light);
+                color: var(--primary);
+                flex-shrink: 0;
+            }
+            .fav-title {
+                flex: 1 1 auto;
+                min-width: 0;
+                font-size: 16px;
+                font-weight: 700;
+                letter-spacing: -0.2px;
+                margin: 0;
+                color: var(--text);
+            }
+            .fav-title-row .modal-close-btn {
+                flex-shrink: 0;
+                width: 30px;
+                height: 30px;
+            }
+            .fav-subtitle {
+                margin: 8px 0 0;
+                padding-left: 42px;
+                font-size: 12.5px;
+                color: var(--text-muted);
+                line-height: 1.55;
+            }
+
+            /* —— 搜索框区 —— */
+            .fav-panel-header {
+                flex-shrink: 0;
+                padding: 14px 22px 0;
+            }
+            .fav-search-input {
+                width: 100%;
+                padding: 10px 16px;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                background: var(--bg);
+                color: var(--text);
+                font-size: 13.5px;
+                outline: none;
+                box-sizing: border-box;
+                transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+            }
+            .fav-search-input::placeholder {
+                color: var(--text-muted);
+            }
+            .fav-search-input:focus {
+                border-color: var(--primary);
+                background: var(--card);
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            }
+
+            /* —— 标签筛选 chip 行 —— */
+            .fav-chips {
+                flex-shrink: 0;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                padding: 12px 22px 4px;
+                min-height: 0;
+            }
+            .fav-chips:empty {
+                display: none;
+            }
+            .fav-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 11px;
+                font-size: 12px;
+                font-weight: 500;
+                line-height: 1;
+                color: var(--text-secondary);
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: 999px;
+                cursor: pointer;
+                white-space: nowrap;
+                transition: color 0.18s, border-color 0.18s, background 0.18s;
+            }
+            .fav-chip:hover {
+                color: var(--primary);
+                border-color: rgba(37, 99, 235, 0.4);
+                background: var(--primary-light);
+            }
+            .fav-chip:active {
+                transform: scale(0.96);
+            }
+            .fav-chip.is-active {
+                color: #fff;
+                background: var(--primary);
+                border-color: var(--primary);
+            }
+            .fav-chip.is-active .fav-chip-count {
+                color: rgba(255, 255, 255, 0.82);
+            }
+            .fav-chip-count {
+                font-size: 10.5px;
+                font-variant-numeric: tabular-nums;
+                color: var(--text-muted);
+            }
+
+            /* —— 列表区（主滚动容器） —— */
+            .fav-list {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                margin-top: 6px;
+                padding: 4px 14px 12px;
+            }
+            /* 滚动条美化 */
+            .fav-list::-webkit-scrollbar,
+            .fav-empty::-webkit-scrollbar {
+                width: 6px;
+            }
+            .fav-list::-webkit-scrollbar-thumb,
+            .fav-empty::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 3px;
+            }
+
+            /* —— 空态 —— */
+            .fav-empty {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow-y: auto;
+                text-align: center;
+                padding: 44px 24px 36px;
+                color: var(--text-muted);
+                font-size: 13px;
+            }
+            .fav-empty svg {
+                display: block;
+                margin: 0 auto 14px;
+                opacity: 0.22;
+            }
+            .fav-empty-title {
+                font-weight: 600;
+                font-size: 14px;
+                color: var(--text-secondary);
+                margin-bottom: 6px;
+            }
+            .fav-empty-desc {
+                font-size: 12.5px;
+                line-height: 1.6;
+            }
+
+            /* —— 列表项：border-top 分隔，密度优先，不用卡片堆叠 —— */
+            .fav-item {
+                position: relative;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 11px 10px 11px 14px;
+                background: transparent;
+                border: 0;
+                border-top: 1px solid var(--border-light);
+                border-radius: 6px;
+                transition: background 0.18s;
+                animation: favItemIn 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
+            }
+            .fav-item:first-child {
+                border-top: 0;
+            }
+            .fav-item.fav-system {
+                background: rgba(37, 99, 235, 0.02);
+            }
+            .fav-item::before {
+                content: '';
+                position: absolute;
+                left: 1px;
+                top: 10px;
+                bottom: 10px;
+                width: 2px;
+                border-radius: 2px;
+                background: var(--primary);
+                opacity: 0;
+                transform: scaleY(0.4);
+                transition: opacity 0.18s, transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+            }
+            .fav-item:hover {
+                background: var(--primary-light);
+            }
+            .fav-item:hover::before {
+                opacity: 1;
+                transform: scaleY(1);
+            }
+            @keyframes favItemIn {
+                from { opacity: 0; transform: translateY(6px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .fav-item-main {
+                flex: 1 1 auto;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+            }
+            .fav-sys-head {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                min-width: 0;
+            }
+            .fav-sys-name {
+                font-size: 13.5px;
+                font-weight: 600;
+                color: var(--text);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .fav-query {
+                font-size: 12px;
+                font-weight: 500;
+                color: var(--text-secondary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+                font-variant-numeric: tabular-nums;
+            }
+            .fav-item.fav-system .fav-query {
+                font-size: 11.5px;
+                color: var(--text-muted);
+            }
+            .fav-sys-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-top: 3px;
+            }
+            .fav-tag-ro {
+                font-size: 10px;
+                font-weight: 500;
+                line-height: 1;
+                padding: 3px 7px;
+                border-radius: 4px;
+                color: var(--text-muted);
+                background: var(--bg);
+                font-variant-numeric: tabular-nums;
+            }
+            .fav-time {
+                font-size: 11px;
+                color: var(--text-muted);
+                flex-shrink: 0;
+                font-variant-numeric: tabular-nums;
+            }
+            .fav-item-actions {
+                display: flex;
+                gap: 4px;
+                flex-shrink: 0;
+            }
+            .fav-item-actions .btn {
+                padding: 4px;
+                min-width: 28px;
+                height: 28px;
+                justify-content: center;
+                font-size: 12px;
+            }
+            .fav-item-actions .btn:active {
+                transform: scale(0.92);
+            }
+            .fav-fill:hover {
+                color: var(--success);
+                border-color: var(--success);
+                background: rgba(16, 185, 129, 0.08);
+            }
+            .fav-delete:hover {
+                color: var(--error);
+                border-color: var(--error);
+                background: rgba(239, 68, 68, 0.08);
+            }
+            .fav-system-badge {
+                display: inline-block;
+                flex-shrink: 0;
+                font-size: 9.5px;
+                padding: 2px 7px;
+                border-radius: 4px;
+                background: var(--primary-light);
+                color: var(--primary);
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                line-height: 1.4;
+            }
+
+            /* —— 底部 —— */
+            .fav-footer {
+                flex-shrink: 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 22px;
+                border-top: 1px solid var(--border-light);
+                background: var(--card);
+            }
+            .fav-count {
+                font-size: 12px;
+                color: var(--text-muted);
+                font-variant-numeric: tabular-nums;
+            }
+
+            /* ========== 更新提示横幅 ========== */
+            .update-banner {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 10px 16px;
+                margin-bottom: 12px;
+                background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+                border: 1px solid #93c5fd;
+                border-radius: var(--radius);
+                font-size: 13px;
+                color: var(--text);
+                animation: updateBannerIn 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+            }
+            @keyframes updateBannerIn {
+                from { opacity: 0; transform: translateY(-8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .update-banner-text {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: #1e40af;
+                min-width: 0;
+            }
+            .update-banner-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-shrink: 0;
+            }
+            .update-banner-link {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--primary);
+                text-decoration: none;
+                white-space: nowrap;
+                cursor: pointer;
+                transition: opacity 0.15s;
+            }
+            .update-banner-link:hover {
+                opacity: 0.8;
+            }
+            .update-banner-close {
+                width: 24px;
+                height: 24px;
+                border-radius: 4px;
+                border: none;
+                background: transparent;
+                color: #64748b;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s;
+            }
+            .update-banner-close:hover {
+                background: rgba(0,0,0,0.06);
+                color: var(--text);
+            }
+
+            /* ========== Icon Hash 计算弹窗 ========== */
+            .iconhash-url-row {
+                display: flex;
+                width: 100%;
+                gap: 0;
+                margin-bottom: 14px;
+            }
+            .iconhash-url-row input {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 9px 14px;
+                border: 1px solid var(--border);
+                border-right: 0;
+                border-radius: var(--radius) 0 0 var(--radius);
+                background: var(--bg);
+                color: var(--text);
+                font-size: 13px;
+                outline: none;
+            }
+            .iconhash-url-row input:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            }
+            .iconhash-dropzone {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 28px 24px;
+                border: 2px dashed var(--border);
+                border-radius: var(--radius);
+                cursor: pointer;
+                color: var(--text-muted);
+                font-size: 13px;
+                transition: all 0.2s;
+                margin-bottom: 4px;
+            }
+            .iconhash-dropzone:hover,
+            .iconhash-dropzone.drag-over {
+                border-color: var(--primary);
+                background: var(--primary-light);
+                color: var(--primary);
+            }
+            .iconhash-upload-link {
+                color: var(--primary);
+                cursor: pointer;
+                text-decoration: underline;
+                text-underline-offset: 2px;
+            }
+            .iconhash-result {
+                margin-top: 16px;
+                padding: 16px;
+                background: var(--bg);
+                border-radius: var(--radius);
+                display: none;
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
+            .iconhash-result.show {
+                display: flex;
+            }
+            .iconhash-value {
+                font-size: 22px;
+                font-weight: 700;
+                font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+                color: var(--text);
+                user-select: all;
+            }
+            .iconhash-actions {
+                display: flex;
+                gap: 8px;
+            }
         }
     </style>
 </head>
@@ -2576,6 +3068,18 @@
                     <button class="btn btn-sm disabled" id="statsToggleBtn" disabled onclick="toggleStats()" title="统计概览（含协议、端口、国家等 Top 5 排名）">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                         统计概览
+                    </button>
+                    <button class="btn btn-sm fav-star-btn" id="favToggleBtn" onclick="handleFavoriteClick()" title="收藏当前查询条件">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        收藏
+                    </button>
+                    <button class="btn btn-sm" id="iconHashBtn" onclick="showIconHashModal()" title="计算 favicon 的 FOFA icon_hash">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                        Icon Hash
                     </button>
                 </div>
 
@@ -2847,13 +3351,35 @@
                     </div>
                 </div>
 
+                <!-- 更新设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span>更新设置</span>
+                    </div>
+                    <div class="config-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoCheckUpdate" checked onchange="saveAutoCheckUpdate(this.checked)">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">启动时自动检测新版本</span>
+                        </label>
+                        <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            通过 GitHub Releases API 检查更新，不在本地存储任何数据
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn btn-primary btn-sm" onclick="manualCheckUpdate()">检查更新</button>
+                        <span style="font-size: 11px; color: var(--text-muted);" id="updateStatus"></span>
+                    </div>
+                </div>
+
                 <!-- 代理设置 -->
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                         <span>代理设置</span>
                     </div>
-                    <p class="settings-section-desc">配置 HTTP/HTTPS 代理（用于通过代理访问 FOFA API）</p>
+                    <p class="settings-section-desc">配置 HTTP/HTTPS/SOCKS5 代理（端口 1080/1081 自动识别为 SOCKS5，用于 API 请求和更新检测）</p>
                     <div class="settings-proxy-grid">
                         <div class="settings-field">
                             <label>主机地址</label>
@@ -2935,6 +3461,78 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-primary" onclick="saveApiKey()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 收藏面板 -->
+    <div class="modal-overlay" id="favoritesPanel" onclick="if(event.target===this)closeFavoritesPanel()">
+        <div class="modal fav-modal">
+            <header class="fav-header">
+                <div class="fav-title-row">
+                    <span class="fav-title-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                    </span>
+                    <h2 class="modal-title fav-title">收藏查询</h2>
+                    <button class="modal-close-btn" onclick="closeFavoritesPanel()" title="关闭">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <p class="modal-desc fav-subtitle">内置 FOFA 查询规则库，支持标签与关键词筛选，点击填充一键应用</p>
+            </header>
+            <div class="fav-panel-header">
+                <input type="text" class="fav-search-input" id="favSearchInput" placeholder="搜索收藏的查询语句..."
+                       oninput="renderFavoritesList(this.value)">
+            </div>
+            <div class="fav-chips" id="favChips"></div>
+            <div class="fav-list" id="favoritesList"></div>
+            <div class="fav-empty" id="favoritesEmpty">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <div class="fav-empty-title">暂无收藏</div>
+                <div class="fav-empty-desc">执行搜索后点击星标按钮即可收藏当前查询条件</div>
+            </div>
+            <div class="fav-footer">
+                <span class="fav-count" id="favCount">0 条收藏</span>
+                <button class="btn btn-ghost btn-sm" id="favClearAllBtn" onclick="clearAllFavorites()">清除全部</button>
+            </div>
+        </div>
+    </div>
+
+            <!-- Icon Hash 计算弹窗 -->
+    <div class="modal-overlay" id="iconHashModal">
+        <div class="modal" style="max-width: 500px;">
+            <h2 class="modal-title">Icon Hash 计算
+                <button class="modal-close-btn" onclick="closeIconHashModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </h2>
+            <p class="modal-desc">计算 favicon 的 FOFA icon_hash 值，使用 MurmurHash3 32-bit 算法</p>
+
+            <!-- URL 输入 -->
+            <div class="iconhash-url-row">
+                <input type="text" id="iconHashUrlInput" placeholder="输入 favicon URL，如 https://example.com/favicon.ico" onkeydown="if(event.key==='Enter')fetchIconFromUrl()">
+                <button class="btn btn-primary btn-sm" style="padding:5px 12px; border-radius: 0 var(--radius) var(--radius) 0; flex-shrink: 0;" onclick="fetchIconFromUrl()">获取</button>
+            </div>
+
+            <!-- 文件拖拽上传 -->
+            <div class="iconhash-dropzone" id="iconHashDropzone">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>拖拽文件到此处，或 <span class="iconhash-upload-link" onclick="document.getElementById('iconHashFileInput').click()">点击上传</span></span>
+                <input type="file" id="iconHashFileInput" accept=".ico,.png,image/x-icon,image/png" style="display:none;" onchange="handleIconFileSelect(event)">
+            </div>
+
+            <!-- 计算结果 -->
+            <div class="iconhash-result" id="iconHashResult">
+                <div style="font-size:11px;color:var(--text-muted);">计算结果</div>
+                <div class="iconhash-value" id="iconHashValue">—</div>
+                <div class="iconhash-actions">
+                    <button class="btn btn-sm" onclick="copyIconHash()">📋 复制</button>
+                    <button class="btn btn-primary btn-sm" onclick="applyIconHashFilter()">填入筛选</button>
+                </div>
             </div>
         </div>
     </div>

@@ -1,0 +1,439 @@
+// js/favorites.js - 收藏功能（存储、查询、渲染、填充）
+
+import { state, STORAGE_KEYS } from './config.js';
+import { escapeHtml, formatTime, showToast } from './utils.js';
+import { restoreFiltersFromData, getFilterQuery, getActiveFiltersData } from './ui.js';
+import { updateSearchButtonState } from './search.js';
+import { FOFA_RULES } from './fofa-rules.js';
+
+// ==================== 存储操作 ====================
+
+const MAX_FAVORITES = 100;
+const SEED_MARKER_KEY = 'fofa_rules_seeded';
+
+function persistFavorites() {
+    localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(state.favorites));
+}
+
+/**
+ * 添加收藏
+ * @param {string} baseQuery - 基础查询（不含筛选条件）
+ * @param {object|null} filtersData - 筛选条件数据
+ * @param {string} mergedQuery - 合并后的完整查询语句
+ */
+export function addFavorite(baseQuery, filtersData, mergedQuery) {
+    if (!baseQuery || !baseQuery.trim()) return;
+
+    // 去重：移除相同 baseQuery 的旧条目
+    state.favorites = state.favorites.filter(f => f.baseQuery !== baseQuery);
+
+    // 添加到最前面
+    state.favorites.unshift({
+        query: mergedQuery,
+        baseQuery: baseQuery,
+        filters: filtersData || null,
+        time: new Date().toISOString()
+    });
+
+    // 上限裁剪
+    if (state.favorites.length > MAX_FAVORITES) {
+        state.favorites = state.favorites.slice(0, MAX_FAVORITES);
+    }
+
+    persistFavorites();
+}
+
+/**
+ * 删除收藏
+ * @param {string} baseQuery - 基础查询
+ */
+export function removeFavorite(baseQuery) {
+    const target = state.favorites.find(f => f.baseQuery === baseQuery);
+    if (target && target.system) return; // 系统规则不可删除
+    state.favorites = state.favorites.filter(f => f.baseQuery !== baseQuery);
+    persistFavorites();
+}
+
+/**
+ * 判断是否已收藏
+ * @param {string} baseQuery
+ * @returns {boolean}
+ */
+export function isFavorite(baseQuery) {
+    if (!baseQuery) return false;
+    return state.favorites.some(f => f.baseQuery === baseQuery);
+}
+
+/**
+ * 获取收藏列表
+ * @param {string} [filterText] - 可选的过滤文本（模糊匹配）
+ * @returns {Array}
+ */
+export function getFavorites(filterText) {
+    if (!filterText || !filterText.trim()) {
+        return [...state.favorites];
+    }
+    const keyword = filterText.trim().toLowerCase();
+    return state.favorites.filter(f =>
+        f.baseQuery.toLowerCase().includes(keyword) ||
+        f.query.toLowerCase().includes(keyword)
+    );
+}
+
+/**
+ * 切换收藏状态
+ * @param {string} baseQuery
+ * @param {object|null} filtersData
+ * @param {string} mergedQuery
+ * @returns {'added'|'removed'|'noop'}
+ */
+export function toggleFavorite(baseQuery, filtersData, mergedQuery) {
+    if (!baseQuery || !baseQuery.trim()) return 'noop';
+
+    if (isFavorite(baseQuery)) {
+        removeFavorite(baseQuery);
+        return 'removed';
+    } else {
+        addFavorite(baseQuery, filtersData, mergedQuery);
+        return 'added';
+    }
+}
+
+/**
+ * 清除全部收藏
+ */
+export function clearAllFavorites() {
+    state.favorites = state.favorites.filter(f => f.system === true);
+    persistFavorites();
+}
+
+// ==================== 系统规则播种 ====================
+
+/**
+ * 构造内置规则收藏条目（含 name/tags）
+ * @param {string} now
+ * @returns {Array}
+ */
+function _buildSystemFavorites(now) {
+    return FOFA_RULES.map(r => ({
+        query: r.query,
+        baseQuery: r.query,
+        name: r.name,
+        tags: Array.isArray(r.tags) ? r.tags.slice() : [],
+        filters: null,
+        time: now,
+        system: true
+    }));
+}
+
+/**
+ * 首次加载时种子内置规则到收藏列表。
+ * 已播种过的旧数据会触发迁移：以当前 FOFA_RULES 为基准重建系统规则部分，
+ * 补齐 name/tags 等新字段，并在规则库条数变化时同步增删（用户自定义收藏保留）。
+ */
+export function seedSystemRules() {
+    const now = new Date().toISOString();
+    const systemFavs = _buildSystemFavorites(now);
+
+    if (!localStorage.getItem(SEED_MARKER_KEY)) {
+        // 首次播种
+        state.favorites = [...state.favorites, ...systemFavs];
+        persistFavorites();
+        localStorage.setItem(SEED_MARKER_KEY, '1');
+        return;
+    }
+
+    // 已播种：判断是否需要迁移/重建系统规则
+    const oldSystem = state.favorites.filter(f => f.system === true);
+    const userFavs = state.favorites.filter(f => f.system !== true);
+
+    // 需要迁移的条件：数量不一致，或任一系统规则缺 name/tags 或 query 不匹配
+    const needsMigration = oldSystem.length !== systemFavs.length ||
+        oldSystem.some((f, i) => !f.name || !Array.isArray(f.tags) ||
+            systemFavs[i] && (f.query !== systemFavs[i].query));
+
+    if (needsMigration) {
+        // 保留用户收藏在前，重建后的系统规则在后
+        state.favorites = [...userFavs, ...systemFavs];
+        persistFavorites();
+    }
+}
+
+// ==================== UI 渲染 ====================
+
+/** 缓存当前渲染的收藏列表，供事件委托按索引查找 */
+let _renderedFavorites = [];
+
+/** 当前激活的标签筛选（null 表示"全部"） */
+let _activeTag = null;
+
+/**
+ * 从收藏列表中聚合所有标签，按出现频次降序排序
+ * @param {Array} favorites
+ * @returns {Array<{tag: string, count: number}>}
+ */
+function _aggregateTags(favorites) {
+    const counts = new Map();
+    for (const f of favorites) {
+        if (!Array.isArray(f.tags) || f.tags.length === 0) continue;
+        for (const t of f.tags) {
+            counts.set(t, (counts.get(t) || 0) + 1);
+        }
+    }
+    return Array.from(counts.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+        .slice(0, 10);
+}
+
+/**
+ * 渲染标签筛选 chip 行
+ * @param {Array<{tag: string, count: number}>} tags
+ */
+function _renderChips(tags) {
+    const chipsEl = document.getElementById('favChips');
+    if (!chipsEl) return;
+
+    // 无可用标签时隐藏整行
+    if (!tags.length) {
+        chipsEl.innerHTML = '';
+        chipsEl.style.display = 'none';
+        return;
+    }
+    chipsEl.style.display = '';
+
+    const allChip = `<button class="fav-chip${_activeTag === null ? ' is-active' : ''}" data-tag="">全部</button>`;
+    const tagChips = tags.map(({ tag, count }) =>
+        `<button class="fav-chip${_activeTag === tag ? ' is-active' : ''}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="fav-chip-count">${count}</span></button>`
+    ).join('');
+
+    chipsEl.innerHTML = allChip + tagChips;
+}
+
+/**
+ * 渲染收藏列表 HTML
+ * @param {string} [filterText] - 可选的过滤文本
+ */
+export function renderFavoritesList(filterText) {
+    const listEl = document.getElementById('favoritesList');
+    const emptyEl = document.getElementById('favoritesEmpty');
+    if (!listEl || !emptyEl) return;
+
+    // 文本搜索匹配的收藏（搜索维度不涉及标签，故先按文本过滤）
+    const matched = getFavorites(filterText);
+
+    // 标签行基于【文本搜索后的结果】聚合，保证 chip 与当前可见集合一致
+    const tags = _aggregateTags(matched);
+    _renderChips(tags);
+
+    // 若当前激活的标签在可见集合中已不存在，则重置为"全部"
+    if (_activeTag !== null && !tags.some(t => t.tag === _activeTag)) {
+        _activeTag = null;
+    }
+
+    // 在文本匹配基础上再叠加标签筛选
+    const favorites = _activeTag === null
+        ? matched
+        : matched.filter(f => Array.isArray(f.tags) && f.tags.includes(_activeTag));
+    _renderedFavorites = favorites;
+
+    if (favorites.length === 0) {
+        listEl.innerHTML = '';
+        listEl.style.display = 'none';
+        emptyEl.style.display = '';
+        return;
+    }
+
+    listEl.style.display = '';
+    emptyEl.style.display = 'none';
+
+    listEl.innerHTML = favorites.map((f, i) => {
+        // 仅前 12 项应用 staggered 渐入，避免长列表动画开销
+        const delay = i < 12 ? ` style="animation-delay:${(i * 24).toFixed(0)}ms"` : '';
+        if (f.system) {
+            const sysTags = Array.isArray(f.tags) && f.tags.length
+                ? `<div class="fav-sys-tags">${f.tags.slice(0, 4).map(t => `<span class="fav-tag-ro">#${escapeHtml(t)}</span>`).join('')}</div>`
+                : '';
+            return `
+            <div class="fav-item fav-system" data-index="${i}"${delay}>
+                <div class="fav-item-main">
+                    <div class="fav-sys-head">
+                        <span class="fav-sys-name">${escapeHtml(f.name || '未命名规则')}</span>
+                        <span class="fav-system-badge">内置</span>
+                    </div>
+                    <span class="fav-query" title="${escapeHtml(f.query)}">${escapeHtml(f.query)}</span>
+                    ${sysTags}
+                </div>
+                <div class="fav-item-actions">
+                    <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>`;
+        }
+        return `
+        <div class="fav-item" data-index="${i}"${delay}>
+            <div class="fav-item-main">
+                <span class="fav-query" title="${escapeHtml(f.query)}">${escapeHtml(f.query)}</span>
+                <span class="fav-time">${formatTime(f.time)}</span>
+            </div>
+            <div class="fav-item-actions">
+                <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </button>
+                <button class="btn btn-sm fav-delete" data-index="${i}" title="删除收藏">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+/**
+ * 设置当前激活的标签筛选并重渲染列表（供 chip 点击事件调用）
+ * @param {string|null} tag - 标签名，null 表示"全部"
+ * @param {string} [filterText] - 当前搜索框文本
+ */
+export function setActiveFavTag(tag, filterText) {
+    _activeTag = tag || null;
+    renderFavoritesList(filterText);
+}
+
+/**
+ * 根据渲染索引获取收藏条目（供事件委托使用）
+ * @param {number} index
+ * @returns {object|undefined}
+ */
+export function getRenderedFavorite(index) {
+    return _renderedFavorites[index];
+}
+
+/**
+ * 从收藏条目填充查询到搜索框
+ * @param {object} entry - 收藏条目
+ */
+export function fillFromFavorite(entry) {
+    if (!entry) return;
+
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = entry.baseQuery || '';
+        updateSearchButtonState();
+    }
+
+    // 恢复筛选条件
+    if (entry.filters && Object.keys(entry.filters).length > 0) {
+        restoreFiltersFromData(entry.filters);
+    }
+
+    // 关闭收藏面板
+    const modal = document.getElementById('favoritesPanel');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+
+    showToast('已填充收藏的查询条件', 'success');
+}
+
+// ==================== 面板控制 ====================
+
+/**
+ * 打开/关闭收藏面板
+ */
+export function toggleFavoritesPanel() {
+    const modal = document.getElementById('favoritesPanel');
+    if (!modal) return;
+
+    const isOpen = modal.classList.contains('show');
+    if (isOpen) {
+        closeFavoritesPanel();
+    } else {
+        // 打开前刷新列表和按钮状态
+        renderFavoritesList();
+        updateFavoriteButtonState();
+        updateFavCount();
+        modal.classList.add('show');
+        // 聚焦搜索框
+        setTimeout(() => {
+            const searchInput = document.getElementById('favSearchInput');
+            if (searchInput) searchInput.focus();
+        }, 150);
+    }
+}
+
+/**
+ * 关闭收藏面板
+ */
+export function closeFavoritesPanel() {
+    const modal = document.getElementById('favoritesPanel');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+    // 清空搜索
+    const searchInput = document.getElementById('favSearchInput');
+    if (searchInput) searchInput.value = '';
+}
+
+/**
+ * 更新收藏按钮状态（空心/填实）
+ */
+export function updateFavoriteButtonState() {
+    const btn = document.getElementById('favToggleBtn');
+    if (!btn) return;
+
+    // 获取当前基础查询（不含筛选条件）
+    const input = document.getElementById('searchInput');
+    const baseQuery = input ? input.value.trim() : '';
+
+    if (baseQuery && isFavorite(baseQuery)) {
+        btn.classList.add('favorited');
+        btn.title = '取消收藏';
+    } else {
+        btn.classList.remove('favorited');
+        btn.title = '收藏当前查询条件';
+    }
+}
+
+/**
+ * 星标按钮点击处理：有查询则切换收藏，无查询则打开面板
+ */
+export function handleFavoriteClick() {
+    const input = document.getElementById('searchInput');
+    const baseQuery = input ? input.value.trim() : '';
+
+    if (!baseQuery) {
+        // 无查询：打开收藏面板
+        toggleFavoritesPanel();
+        return;
+    }
+
+    // 有查询：切换收藏状态
+    const filtersData = getActiveFiltersData();
+    const filterQuery = getFilterQuery();
+    const mergedQuery = filterQuery ? `${baseQuery} && ${filterQuery}` : baseQuery;
+
+    const result = toggleFavorite(baseQuery, filtersData, mergedQuery);
+    if (result === 'added') {
+        showToast('已收藏当前查询条件', 'success');
+    } else if (result === 'removed') {
+        showToast('已取消收藏', 'info');
+    }
+    updateFavoriteButtonState();
+}
+
+/**
+ * 更新收藏计数显示
+ */
+export function updateFavCount() {
+    const countEl = document.getElementById('favCount');
+    const clearBtn = document.getElementById('favClearAllBtn');
+    const count = state.favorites.length;
+    if (countEl) countEl.textContent = `${count} 条收藏`;
+    if (clearBtn) clearBtn.style.display = count > 0 ? '' : 'none';
+}

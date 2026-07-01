@@ -101,3 +101,23 @@ export function openUrl(url) {
         window.open(url, '_blank', 'noopener,noreferrer');
     }
 }
+
+/**
+ * 通过 Tauri Rust 侧检查 GitHub 更新（使用已配置的代理）
+ * @returns {Promise<{version: string, url: string}|null>}
+ */
+export async function checkGitHubUpdate() {
+    if (!isTauri()) return null;
+    try {
+        const data = await window.__TAURI_INTERNALS__.invoke('check_github_update_cmd');
+        if (data && data.tag_name) {
+            return {
+                version: data.tag_name,
+                url: data.html_url || 'https://github.com/Mr-xn/fofa_leak_search/releases'
+            };
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}

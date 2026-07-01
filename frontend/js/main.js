@@ -1,6 +1,6 @@
 // js/main.js - 主入口（初始化、事件绑定）
 
-import { state, STORAGE_KEYS } from './config.js';
+import { state, STORAGE_KEYS, APP_VERSION } from './config.js';
 import { showToast, debounce, escapeHtml } from './utils.js';
 import { initTauriBridge, isTauri, openUrl } from './tauri-bridge.js';
 import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as clearAllCacheStorage, getCachedUserInfo, setCachedUserInfo, getUsageStats, getHistoryFilters } from './storage.js';
@@ -17,6 +17,9 @@ import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownlo
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
 import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
+import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag } from './favorites.js';
+import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
+import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter } from './icon-hash.js';
 import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
 import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
 import { getSelectedFields } from './ui.js';
@@ -81,6 +84,25 @@ window.deleteHistoryItem = (query) => {
     deleteHistoryItem(query);
     showSuggestions();
 };
+window.toggleFavoritesPanel = toggleFavoritesPanel;
+window.closeFavoritesPanel = closeFavoritesPanel;
+window.toggleFavorite = toggleFavorite;
+window.clearAllFavorites = clearAllFavorites;
+window.renderFavoritesList = renderFavoritesList;
+window.fillFromFavorite = fillFromFavorite;
+window.removeFavorite = removeFavorite;
+window.isFavorite = isFavorite;
+window.updateFavoriteButtonState = updateFavoriteButtonState;
+window.handleFavoriteClick = handleFavoriteClick;
+window.updateFavCount = updateFavCount;
+window.manualCheckUpdate = manualCheckUpdate;
+window.saveAutoCheckUpdate = saveAutoCheckUpdate;
+window.showIconHashModal = showIconHashModal;
+window.closeIconHashModal = closeIconHashModal;
+window.fetchIconFromUrl = fetchIconFromUrl;
+window.handleIconFileSelect = handleIconFileSelect;
+window.copyIconHash = copyIconHash;
+window.applyIconHashFilter = applyIconHashFilter;
 window.sortTable = sortTable;
 window.copyColumn = copyColumn;
 window.goToPage = goToPage;
@@ -600,6 +622,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化 API Key
     if (state.apiKey) {
         document.getElementById('apiKeyInput').value = state.apiKey;
+    } else {
+        // 启动时如果没有配置 API Key，自动弹出提示
+        showApiKeyModal();
     }
 
     // 初始化缓存开关状态
@@ -659,6 +684,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化快速筛选
     initQuickFilters();
 
+    // 种子化内置 FOFA 规则到收藏（仅首次）
+    seedSystemRules();
+
     // 搜索框事件
     const searchInput = document.getElementById('searchInput');
     const searchClearBtn = document.getElementById('searchClearBtn');
@@ -696,6 +724,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (copyBtn && state.currentQuery) {
             copyBtn.disabled = false;
         }
+        // 同步更新收藏按钮状态
+        updateFavoriteButtonState();
     });
 
     // 表格横向滚动阴影检测
@@ -736,7 +766,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 点击遮罩层关闭弹窗
-    ['apiKeyModal', 'cacheModal', 'usageModal', 'aboutModal', 'smartDownloadModal', 'settingsModal'].forEach(id => {
+    ['apiKeyModal', 'cacheModal', 'usageModal', 'aboutModal', 'smartDownloadModal', 'settingsModal', 'iconHashModal', 'favoritesPanel'].forEach(id => {
         document.getElementById(id).addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay')) {
                 e.target.classList.remove('show');
@@ -794,6 +824,84 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // 收藏面板事件委托：填充 / 删除
+    const favoritesList = document.getElementById('favoritesList');
+    if (favoritesList) {
+        favoritesList.addEventListener('click', (e) => {
+            // 填充按钮
+            const fillBtn = e.target.closest('.fav-fill');
+            if (fillBtn) {
+                e.stopPropagation();
+                const idx = parseInt(fillBtn.dataset.index, 10);
+                const entry = getRenderedFavorite(idx);
+                if (entry) fillFromFavorite(entry);
+                return;
+            }
+            // 删除按钮
+            const deleteBtn = e.target.closest('.fav-delete');
+            if (deleteBtn) {
+                e.stopPropagation();
+                const idx = parseInt(deleteBtn.dataset.index, 10);
+                const entry = getRenderedFavorite(idx);
+                if (entry && entry.baseQuery && !entry.system) {
+                    removeFavorite(entry.baseQuery);
+                    showToast('已取消收藏', 'info');
+                    const searchText = document.getElementById('favSearchInput')?.value || '';
+                    renderFavoritesList(searchText);
+                    updateFavoriteButtonState();
+                    updateFavCount();
+                }
+                return;
+            }
+        });
+    }
 
+    // 收藏面板打开时更新计数
+    const favPanel = document.getElementById('favoritesPanel');
+    if (favPanel) {
+        const observer = new MutationObserver(() => {
+            if (favPanel.classList.contains('show')) {
+                updateFavCount();
+            }
+        });
+        observer.observe(favPanel, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    // 标签筛选 chip 点击委托（chip 行由 renderFavoritesList 重新生成）
+    const favChips = document.getElementById('favChips');
+    if (favChips) {
+        favChips.addEventListener('click', (e) => {
+            const chip = e.target.closest('.fav-chip');
+            if (!chip) return;
+            const searchText = document.getElementById('favSearchInput')?.value || '';
+            setActiveFavTag(chip.dataset.tag || null, searchText);
+        });
+    }
+
+    // ==================== 更新检测 ====================
+
+    // 设置面板：恢复自动检测更新开关状态
+    const autoCheckToggle = document.getElementById('autoCheckUpdate');
+    if (autoCheckToggle) {
+        autoCheckToggle.checked = state.autoCheckUpdate;
+    }
+
+    // 更新 About 弹窗中的版本号
+    const aboutVersion = document.querySelector('.about-version');
+    if (aboutVersion) {
+        aboutVersion.textContent = `v${APP_VERSION}`;
+    }
+
+    // 启动时自动检测更新（延迟 2 秒，避免阻塞首屏）
+    if (state.autoCheckUpdate) {
+        setTimeout(() => autoCheckUpdate(), 2000);
+    }
 
 });
+
+// 保存自动检测更新开关状态（非模块作用域，供 HTML onclick 调用）
+function saveAutoCheckUpdate(enabled) {
+    state.autoCheckUpdate = enabled;
+    localStorage.setItem(STORAGE_KEYS.autoCheckUpdate, enabled);
+    showToast(enabled ? '已开启自动检测更新' : '已关闭自动检测更新', 'info');
+}

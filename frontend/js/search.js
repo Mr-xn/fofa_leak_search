@@ -129,6 +129,14 @@ export async function doSearch() {
     // 保存到历史记录：基础查询 + 关联的筛选条件
     addToHistory(baseQuery, activeFiltersData);
 
+    // 搜索时自动收起筛选面板
+    const filterPanel = document.getElementById('quickFiltersPanel');
+    const filterBtn = document.getElementById('filterToggleBtn');
+    if (filterPanel && filterPanel.style.display !== 'none') {
+        filterPanel.style.display = 'none';
+        if (filterBtn) filterBtn.classList.remove('btn-primary');
+    }
+
     await fetchResults();
 }
 

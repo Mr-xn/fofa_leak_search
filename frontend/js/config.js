@@ -1,5 +1,8 @@
 // js/config.js - 配置常量和状态管理
 
+// ==================== 应用版本 ====================
+export const APP_VERSION = '1.2.0';
+
 // ==================== 全局状态 ====================
 export const state = {
     apiKey: localStorage.getItem('fofa_api_key') || '',
@@ -15,7 +18,9 @@ export const state = {
     useCache: localStorage.getItem('fofa_use_cache') !== 'false',
     db: null,
     userInfo: null,  // 账户信息，从缓存加载
-    apiBaseUrl: ''   // Tauri 模式: 'http://localhost:PORT'，Web 模式: ''（相对路径）
+    apiBaseUrl: '',  // Tauri 模式: 'http://localhost:PORT'，Web 模式: ''（相对路径）
+    favorites: (() => { try { return JSON.parse(localStorage.getItem('fofa_favorites') || '[]'); } catch { return []; } })(),
+    autoCheckUpdate: localStorage.getItem('fofa_auto_check_update') !== 'false'
 };
 
 // ==================== IndexedDB 配置 ====================
@@ -47,7 +52,9 @@ export const STORAGE_KEYS = {
     proxyUsername: 'fofa_proxy_username', // 代理用户名
     proxyPassword: 'fofa_proxy_password', // 代理密码
     userAgent: 'fofa_user_agent',        // 自定义 User-Agent
-    customHeaders: 'fofa_custom_headers'  // 自定义请求 Headers (JSON)
+    customHeaders: 'fofa_custom_headers', // 自定义请求 Headers (JSON)
+    favorites: 'fofa_favorites',         // 收藏的查询语句
+    autoCheckUpdate: 'fofa_auto_check_update'  // 启动时自动检测更新
 };
 
 // ==================== 默认选中字段 ====================
