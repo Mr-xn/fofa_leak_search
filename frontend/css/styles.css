@@ -2503,8 +2503,9 @@ tr:last-child td {
     .filter-inputs {
         grid-template-columns: 1fr;
     }
+}
 
-    /* ========== 收藏功能样式 ========== */
+/* ========== 收藏功能样式 ========== */
     .fav-star-btn {
         position: relative;
         transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
@@ -2995,4 +2996,3 @@ tr:last-child td {
         display: flex;
         gap: 8px;
     }
-}
