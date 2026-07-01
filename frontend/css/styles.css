@@ -2860,6 +2860,202 @@ tr:last-child td {
         font-variant-numeric: tabular-nums;
     }
 
+    /* ========== 收藏星标按钮内置态 ========== */
+    .fav-star-btn.builtin {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .fav-star-btn.builtin:hover {
+        opacity: 0.4;
+        background: transparent;
+        border-color: var(--border);
+        color: var(--text-muted);
+    }
+
+    /* ========== 用户收藏名称编辑 ========== */
+    .fav-name-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 2px;
+    }
+    .fav-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        cursor: default;
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.4;
+    }
+    .fav-edit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s, background 0.15s;
+        flex-shrink: 0;
+    }
+    .fav-item:hover .fav-edit-btn {
+        opacity: 1;
+    }
+    .fav-edit-btn:hover {
+        color: var(--primary);
+        background: var(--primary-light);
+    }
+    .fav-name-edit-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 2px;
+    }
+    .fav-name-input {
+        flex: 1;
+        min-width: 0;
+        padding: 3px 8px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--primary);
+        border-radius: 4px;
+        background: var(--card);
+        color: var(--text);
+        outline: none;
+        line-height: 1.4;
+    }
+    .fav-name-input:focus {
+        box-shadow: 0 0 0 2px var(--primary-light);
+    }
+    .fav-name-save,
+    .fav-name-cancel {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: background 0.15s;
+    }
+    .fav-name-save {
+        background: var(--primary-light);
+        color: var(--primary);
+    }
+    .fav-name-save:hover {
+        background: var(--primary);
+        color: #fff;
+    }
+    .fav-name-cancel {
+        background: transparent;
+        color: var(--text-muted);
+    }
+    .fav-name-cancel:hover {
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    /* ========== 用户收藏标签 ========== */
+    .fav-user-tags {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 3px;
+        position: relative;
+    }
+    .fav-tag-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 7px;
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--text-muted);
+        background: var(--bg);
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        line-height: 1.6;
+        white-space: nowrap;
+    }
+    .fav-tag-add {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: 1px dashed var(--border);
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .fav-tag-add:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: var(--primary-light);
+    }
+
+    /* ========== 标签选择 Popover ========== */
+    .fav-tag-popover {
+        position: absolute;
+        z-index: 100;
+        min-width: 160px;
+        max-width: 220px;
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        padding: 6px;
+        margin-top: 4px;
+    }
+    .fav-tag-popover-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        padding: 4px 6px 6px;
+        border-bottom: 1px solid var(--border-light);
+        margin-bottom: 4px;
+    }
+    .fav-tag-option {
+        display: block;
+        width: 100%;
+        padding: 5px 8px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: transparent;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.1s, color 0.1s;
+    }
+    .fav-tag-option:hover {
+        background: var(--bg);
+        color: var(--text);
+    }
+    .fav-tag-option.is-active {
+        background: var(--primary-light);
+        color: var(--primary);
+        font-weight: 600;
+    }
+
     /* ========== 更新提示横幅 ========== */
     .update-banner {
         display: flex;
