@@ -3014,7 +3014,7 @@ tr:last-child td {
         z-index: 500;
         min-width: 160px;
         max-width: 220px;
-        max-height: 200px;
+        max-height: 320px;
         overflow-y: auto;
         background: var(--card);
         border: 1px solid var(--border);
@@ -3030,6 +3030,34 @@ tr:last-child td {
         padding: 4px 6px 6px;
         border-bottom: 1px solid var(--border-light);
         margin-bottom: 4px;
+    }
+    .fav-tag-filter-row {
+        padding: 0 0 4px;
+    }
+    .fav-tag-filter-input {
+        width: 100%;
+        padding: 4px 8px;
+        font-size: 11px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--text);
+        outline: none;
+        box-sizing: border-box;
+    }
+    .fav-tag-filter-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px var(--primary-light);
+    }
+    .fav-tag-list {
+        max-height: 140px;
+        overflow-y: auto;
+    }
+    .fav-tag-empty {
+        padding: 8px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-muted);
     }
     .fav-tag-option {
         display: block;
