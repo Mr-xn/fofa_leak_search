@@ -3054,6 +3054,52 @@ tr:last-child td {
         color: var(--primary);
         font-weight: 600;
     }
+    .fav-tag-popover-divider {
+        height: 1px;
+        background: var(--border-light);
+        margin: 4px 0;
+    }
+    .fav-tag-custom-row {
+        display: flex;
+        gap: 4px;
+        padding: 2px 0;
+    }
+    .fav-tag-custom-input {
+        flex: 1;
+        min-width: 0;
+        padding: 4px 8px;
+        font-size: 11px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--text);
+        outline: none;
+    }
+    .fav-tag-custom-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px var(--primary-light);
+    }
+    .fav-tag-custom-add {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--primary);
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .fav-tag-custom-add:hover {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
 
     /* ========== 更新提示横幅 ========== */
     .update-banner {
