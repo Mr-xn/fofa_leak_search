@@ -4,7 +4,21 @@
 
 FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2](https://tauri.app/) 构建。
 
-基于 [FOFA](https://fofa.info) API，提供快速搜索、多字段筛选、数据导出、并发下载等功能，内置 F 点保护机制防止意外扣费。
+基于 [FOFA](https://fofa.info) API，提供快速搜索、多字段筛选、智能分片下载、规则库收藏、Icon Hash 计算、在线更新检测等功能，内置 F 点保护机制防止意外扣费。
+
+## 最近更新
+
+### v1.2.0
+- 新增 **FOFA 规则库**，首次启动自动注入内置查询模板并支持一键填充
+- 新增 **Icon Hash 计算器**，支持 URL favicon 与本地文件两种计算方式
+- 新增 **在线更新检测** 与手动检查更新入口
+- 新增 **收藏查询功能**，可保存查询语句和筛选条件并快速恢复
+
+### v1.1.0
+- 新增 **智能分片下载**，可自动规划分片策略并去重合并结果
+- 设置中心整合 **API / 配置管理 / 导出 / 代理 / 请求设置**
+- 支持 **HTTP/HTTPS/SOCKS5 代理**、自定义 **User-Agent / Headers**
+- 搜索结果 URL 支持点击打开，新增复制查询、列宽拖动、macOS 菜单栏支持
 
 ---
 
@@ -14,11 +28,16 @@ FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2]
 - 支持 FOFA 全部查询语法，Base64 自动编码
 - **51 个返回字段**，根据账户权限动态解锁（免费 34 个，个人版+更多）
 - **快速筛选面板**：基础查询、应用/产品、资产标记、协议、地理位置、证书等多分类筛选
+- **FOFA 规则库**：内置常用语法模板，支持搜索过滤、一键填充
+- **收藏查询**：保存查询语句与关联筛选条件，支持快速恢复
 - 搜索历史记录，自动保存关联筛选条件
+- 搜索结果 URL 支持直接调用系统默认浏览器打开
+- 支持复制当前查询语句、表格列宽拖动调整
 
 ### 数据导出
 - 下载当前页 / 一键下载全部 / 自定义页数范围 / 全部分页下载
 - **并发下载**：支持 1~20 并发数，批次间动态延迟防限流
+- **智能分片下载**：自动分析结果分布并规划分片策略，绕过单次查询限制
 - 进度实时展示（状态 + 进度条 + 详细信息）
 - CSV 格式导出（含 BOM 支持中文）
 
@@ -34,15 +53,23 @@ FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2]
 - 异步刷新 + toast 提示
 
 ### 配置管理
-- 配置导入/导出（API Key、历史、字段、缓存设置）
+- 统一设置中心：API 配置、配置管理、导出设置、代理设置、请求设置
+- 配置导入/导出（API Key、历史、字段、缓存设置、代理、UA、自定义 Headers）
+- 支持 HTTP/HTTPS/SOCKS5 代理
+- 支持自定义 User-Agent 与 HTTP Headers
 - IndexedDB 缓存，可配置有效期
 - 查询语句规范化，避免缓存未命中
+
+### 辅助工具
+- **Icon Hash 计算器**：兼容 FOFA icon_hash 算法，可复制结果或直接带入筛选
+- **在线更新检测**：启动自动检查 GitHub Releases，也支持手动检查
+- macOS 原生菜单栏与常用快捷键支持
 
 ---
 
 ## 下载
 
-从 [Releases](https://github.com/Mr-xn/fofa-leak-search/releases) 页面下载对应平台的安装包：
+从 [Releases](https://github.com/Mr-xn/fofa_leak_search/releases) 页面下载对应平台的安装包：
 
 | 平台 | 架构 | 格式 |
 |------|------|------|
@@ -81,14 +108,17 @@ sudo dpkg -i fofa-leak-search*.deb
 
 ```bash
 # 克隆仓库
-git clone https://github.com/Mr-xn/fofa-leak-search.git
-cd fofa-leak-search
+git clone https://github.com/Mr-xn/fofa_leak_search.git
+cd fofa_leak_search
 
 # 安装依赖
 npm install
 
 # 开发模式（热重载）
 npm run dev
+
+# 运行测试
+npm test
 
 # 生产构建
 npm run build
@@ -101,19 +131,19 @@ npm run build
 ## 项目结构
 
 ```
-fofa-leak-search/
-├── index.html                  # 主页面（HTML + CSS + JS）
-├── js/                         # ES Module 模块
-│   ├── config.js               # 配置常量和状态管理
-│   ├── utils.js                # 工具函数
-│   ├── query-normalizer.js     # 查询语句规范化
-│   ├── storage.js              # localStorage + IndexedDB
-│   ├── api.js                  # API 请求封装
-│   ├── tauri-bridge.js         # Tauri 桌面环境适配
-│   ├── ui.js                   # UI 交互
-│   ├── search.js               # 搜索功能
-│   ├── results.js              # 结果展示 + 下载
-│   └── main.js                 # 主入口
+fofa_leak_search/
+├── frontend/                   # 前端静态资源
+│   ├── index.html              # 主页面
+│   ├── css/
+│   │   └── styles.css          # 样式表
+│   └── js/                     # ES Module 模块
+│       ├── favorites.js        # 收藏查询
+│       ├── fofa-rules.js       # FOFA 规则库
+│       ├── icon-hash.js        # Icon Hash 计算器
+│       ├── smart-downloader.js # 智能分片下载
+│       ├── updater.js          # 在线更新检测
+│       ├── user-info.js        # 账户信息
+│       └── main.js             # 主入口
 ├── src-tauri/                  # Tauri 2 项目
 │   ├── Cargo.toml              # Rust 依赖
 │   ├── tauri.conf.json         # 应用配置
@@ -122,8 +152,7 @@ fofa-leak-search/
 │       ├── main.rs             # Rust 入口
 │       ├── lib.rs              # Tauri 应用逻辑
 │       └── proxy.rs            # 内置 HTTP 代理 (axum)
-├── scripts/                    # 构建脚本
-└── .github/workflows/          # CI/CD (6 平台自动构建)
+└── .github/workflows/          # CI/CD 工作流
 ```
 
 ---
@@ -143,10 +172,11 @@ fofa-leak-search/
 ## 使用说明
 
 1. **获取 API Key**：登录 [FOFA](https://fofa.info)，前往 [个人中心](https://fofa.info/userInfo) 获取
-2. **配置 API Key**：打开应用 → 点击「API 配置」→ 输入 Key → 保存
-3. **搜索**：输入查询语句（如 `title="登录"`）→ 点击搜索
-4. **筛选**：点击「筛选」按钮展开面板，选择条件自动组合
-5. **导出**：点击「下载数据」→ 选择范围 → 开始下载
+2. **完成初始化配置**：打开应用 → 进入「设置」→ 填入 API Key，并按需配置代理、User-Agent、Headers
+3. **发起搜索**：输入查询语句（如 `title="登录"`）或从规则库/收藏面板一键填充查询
+4. **组合筛选**：点击「筛选」按钮展开面板，自动组合协议、地域、证书、资产标记等条件
+5. **辅助分析**：需要 icon_hash 时可直接使用内置 Icon Hash 计算器生成并回填条件
+6. **导出结果**：点击「下载数据」→ 选择普通下载或智能分片下载 → 开始导出
 
 ---
 
