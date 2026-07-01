@@ -17,7 +17,7 @@ import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownlo
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
 import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
-import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags } from './favorites.js';
+import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter } from './icon-hash.js';
 import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
@@ -87,7 +87,7 @@ window.deleteHistoryItem = (query) => {
 window.toggleFavoritesPanel = toggleFavoritesPanel;
 window.closeFavoritesPanel = closeFavoritesPanel;
 window.toggleFavorite = toggleFavorite;
-window.clearAllFavorites = clearAllFavorites;
+window.clearAllFavorites = handleClearAllFavorites;
 window.renderFavoritesList = renderFavoritesList;
 window.fillFromFavorite = fillFromFavorite;
 window.removeFavorite = removeFavorite;
@@ -577,8 +577,34 @@ async function _showTagPopover(anchor, entry, idx) {
     };
     setTimeout(() => document.addEventListener('click', closeHandler), 0);
 
-    // 定位并插入
-    anchor.parentElement.appendChild(popover);
+    // 挂载到 fav-modal，相对于其做绝对定位（避开 .fav-list overflow 裁剪和 .fav-item 层叠上下文）
+    const modal = document.querySelector('.fav-modal');
+    if (!modal) { anchor.parentElement.appendChild(popover); return; }
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const modalRect = modal.getBoundingClientRect();
+    const popoverHeight = 200; // max-height
+
+    // 优先放在 "+" 按钮下方，空间不够则放上方
+    let top = anchorRect.bottom - modalRect.top + 4;
+    if (top + popoverHeight > modalRect.height - 8) {
+        // 放上方：popover 底边紧贴 "+" 顶边
+        top = anchorRect.top - modalRect.top - popoverHeight - 4;
+        if (top < 4) top = 4; // 不低于 modal 顶部
+    }
+
+    // 水平：与 "+" 按钮左对齐，不超出 modal 右侧
+    const left = Math.min(anchorRect.left - modalRect.left, modalRect.width - 228);
+
+    popover.style.top = `${top}px`;
+    popover.style.left = `${left}px`;
+
+    modal.appendChild(popover);
+
+    // 列表滚动时关闭 popover（避免与锚点错位）
+    const favList = document.querySelector('.fav-list');
+    const onScroll = () => { popover.remove(); favList?.removeEventListener('scroll', onScroll); };
+    setTimeout(() => favList?.addEventListener('scroll', onScroll, { once: true }), 0);
 }
 document.addEventListener('DOMContentLoaded', async () => {
     // 设置搜索按钮更新函数（用于筛选条件变化时更新按钮状态）

@@ -126,6 +126,17 @@ export function clearAllFavorites() {
 }
 
 /**
+ * 清除全部用户收藏 + 刷新 UI（供 HTML onclick 调用）
+ */
+export function handleClearAllFavorites() {
+    clearAllFavorites();
+    const searchText = document.getElementById('favSearchInput')?.value || '';
+    renderFavoritesList(searchText);
+    updateFavCount();
+    updateFavoriteButtonState();
+}
+
+/**
  * 更新用户收藏的别名
  * @param {string} baseQuery
  * @param {string} newName
