@@ -75,8 +75,9 @@ function stopResize() {
 // ==================== IPv6 地址检测 ====================
 function isIPv6(value) {
     if (!value || typeof value !== 'string') return false;
-    // IPv6 地址包含冒号且长度较长
-    return value.includes(':') && value.length > 15;
+    // IPv6 地址包含至少 2 个冒号（排除 URL 的 http://），且不含 URL 路径斜杠
+    const colons = (value.match(/:/g) || []).length;
+    return colons >= 2 && !value.includes('/') && !value.includes('.');
 }
 
 function formatIPv6(value) {
@@ -177,7 +178,7 @@ export function renderTable(fields) {
                 if (field === 'link') cellClasses.push('link-cell');
                 const cellClass = cellClasses.join(' ');
                 const recoveredCell = field === 'link' ? recoverEllipsizedLink(cell, row, fields) : cell;
-                const displayValue = isIpv6 ? formatIPv6(recoveredCell) : recoveredCell;
+                const displayValue = (field === 'ip' && isIpv6) ? formatIPv6(recoveredCell) : recoveredCell;
                 const colWidth = getColumnWidth(field, fields.length);
                 return `
                     <td title="${escapeHtml(recoveredCell)}" class="${cellClass}" style="max-width: ${colWidth};">
