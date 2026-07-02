@@ -5,7 +5,7 @@ import { escapeHtml, formatNumber, showToast } from './utils.js';
 import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls } from './storage.js';
-import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
+import { info as logInfo, warn as logWarn, error as logError, debug as logDebug } from './logger.js';
 
 // 延迟注入：打破 search.js ↔ results.js 循环依赖
 let _fetchResults = null;
@@ -105,7 +105,9 @@ export function recoverEllipsizedLink(linkValue, row, fields) {
     const host = String(row[hostIndex]).trim();
     if (!host || host.includes('...')) return linkValue;
     const protocol = linkValue.match(/^https:\/\//i) ? 'https://' : 'http://';
-    return `${protocol}${host}`;
+    const recovered = `${protocol}${host}`;
+    logDebug('results', 'URL 省略号修复', { from: linkValue, to: recovered, host });
+    return recovered;
 }
 
 // 根据字段类型估算合适的列宽

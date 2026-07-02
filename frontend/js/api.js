@@ -60,6 +60,18 @@ export async function fetchSearchResults(query, page, size, fields, full = false
         resultCount: Array.isArray(data.results) ? data.results.length : 0,
         consumedFpoint: data.consumed_fpoint
     });
+    // 调试：捕获原始 link 字段值，用于诊断 URL 截断来源
+    if (Array.isArray(data.results) && data.results.length > 0) {
+        const fieldsArr = fields.split(',').map(f => f.trim());
+        const linkIdx = fieldsArr.indexOf('link');
+        const hostIdx = fieldsArr.indexOf('host');
+        const sampleSize = Math.min(3, data.results.length);
+        const samples = data.results.slice(0, sampleSize).map(row => ({
+            link: linkIdx >= 0 ? row[linkIdx] : '(非选中字段)',
+            host: hostIdx >= 0 ? row[hostIdx] : '(非选中字段)'
+        }));
+        logDebug('api', 'FOFA 原始响应 link/host 采样', { sampleCount: sampleSize, samples });
+    }
     return data;
 }
 
