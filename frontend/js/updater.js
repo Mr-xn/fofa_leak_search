@@ -3,6 +3,7 @@
 import { APP_VERSION, STORAGE_KEYS, state } from './config.js';
 import { showToast } from './utils.js';
 import { checkGitHubUpdate } from './tauri-bridge.js';
+import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
 
 const GITHUB_REPO = 'Mr-xn/fofa_leak_search';
 const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -62,14 +63,19 @@ export function isNewerVersion(latest, current) {
  * @returns {Promise<{version: string, url: string}|null>}
  */
 export async function fetchLatestRelease() {
+    logInfo('updater', '开始获取 GitHub 最新版本', { url: RELEASES_API });
     // 优先使用 Tauri Rust 侧请求（走代理），回退到前端 fetch
     const tauriResult = await checkGitHubUpdate();
-    if (tauriResult) return tauriResult;
+    if (tauriResult) {
+        logInfo('updater', '通过 Tauri 获取最新版本成功', { version: tauriResult.version, url: tauriResult.url });
+        return tauriResult;
+    }
 
     try {
         const response = await fetch(RELEASES_API, {
             headers: { Accept: 'application/vnd.github+json' }
         });
+        logInfo('updater', 'GitHub Releases API 响应', { status: response.status, ok: response.ok, url: RELEASES_API });
         if (!response.ok) return null;
 
         const data = await response.json();
@@ -79,7 +85,8 @@ export async function fetchLatestRelease() {
             version: data.tag_name,
             url: data.html_url || RELEASES_URL
         };
-    } catch {
+    } catch (e) {
+        logError('updater', '获取 GitHub 最新版本失败', { message: e.message || String(e), url: RELEASES_API });
         return null;
     }
 }
@@ -96,6 +103,7 @@ export async function checkForUpdates(silent = false) {
 
     const release = await fetchLatestRelease();
     if (!release) {
+        logWarn('updater', '检查更新失败：未获取到 release', { silent, currentVersion });
         if (!silent) {
             showToast('检查更新失败，请检查网络连接', 'error');
         }
@@ -103,6 +111,13 @@ export async function checkForUpdates(silent = false) {
     }
 
     const hasUpdate = isNewerVersion(release.version, currentVersion);
+    logInfo('updater', '更新检查完成', {
+        silent,
+        currentVersion,
+        latestVersion: release.version,
+        hasUpdate,
+        releaseUrl: release.url
+    });
 
     if (hasUpdate) {
         if (!silent) {

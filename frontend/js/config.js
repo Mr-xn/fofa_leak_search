@@ -54,6 +54,9 @@ export const STORAGE_KEYS = {
     userAgent: 'fofa_user_agent',        // 自定义 User-Agent
     customHeaders: 'fofa_custom_headers', // 自定义请求 Headers (JSON)
     favorites: 'fofa_favorites',         // 收藏的查询语句
+    loggingEnabled: 'fofa_logging_enabled', // 诊断日志开关
+    loggingLevel: 'fofa_logging_level',   // 诊断日志等级
+    logs: 'fofa_logs',                    // 诊断日志内容
     autoCheckUpdate: 'fofa_auto_check_update'  // 启动时自动检测更新
 };
 

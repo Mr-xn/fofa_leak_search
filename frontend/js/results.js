@@ -5,6 +5,7 @@ import { escapeHtml, formatNumber, showToast } from './utils.js';
 import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls } from './storage.js';
+import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
 
 // 延迟注入：打破 search.js ↔ results.js 循环依赖
 let _fetchResults = null;
@@ -631,6 +632,7 @@ export async function startDownload() {
         const fields = getSelectedFields();
         const allowUseFPoints = document.getElementById('allowUseFPoints')?.checked || false;
         const concurrency = parseInt(document.getElementById('downloadConcurrency')?.value || '5');
+        logInfo('download', '开始下载任务', { range, pageSize, fields, allowUseFPoints, concurrency, query: state.currentQuery });
 
         // 获取账户信息
         const maxSize = getMaxSize();
@@ -692,6 +694,7 @@ export async function startDownload() {
             await downloadPageRange(startPage, endPage, pageSize, fields, concurrency);
         }
     } catch (error) {
+        logError('download', '下载任务失败', { message: error.message || String(error), query: state.currentQuery });
         showToast(`下载出错: ${error.message || '未知错误'}`, 'error');
         hideDownloadProgress();
     }
@@ -901,6 +904,7 @@ async function fetchWithRetry(query, page, pageSize, fields, maxRetries) {
 
 // 生成 CSV 并下载
 function downloadCSV(fields, data, filename) {
+    logInfo('download', '导出 CSV', { filename, rowCount: data.length, fields: fields.join(',') });
     const BOM = '﻿';
     const header = fields.map(f => `"${FIELD_LABELS[f] || f}"`).join(',');
 

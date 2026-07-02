@@ -8,6 +8,7 @@ import { fetchSearchResults } from './api.js';
 import { getSelectedFields, showApiKeyModal, getFilterQuery, getActiveFiltersData, hasActiveFilters } from './ui.js';
 import { renderTable, renderPagination } from './results.js';
 import { loadStats } from './stats.js';
+import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
 
 // ==================== 查询可提交性判断 ====================
 /**
@@ -160,6 +161,13 @@ export async function fetchResults() {
     const pageSize = document.getElementById('pageSize').value;
     const fields = getSelectedFields();
     const cacheKey = getCacheKey(state.currentQuery, state.currentPage, pageSize, fields);
+    logInfo('search', '开始获取搜索结果', {
+        query: state.currentQuery,
+        page: state.currentPage,
+        pageSize,
+        fields,
+        useCache: state.useCache
+    });
 
     let data = null;
     let fromCache = false;
@@ -170,6 +178,9 @@ export async function fetchResults() {
         if (cached) {
             data = cached.data;
             fromCache = true;
+            logInfo('search', '缓存命中', { cacheKey, query: state.currentQuery, page: state.currentPage });
+        } else {
+            logInfo('search', '缓存未命中', { cacheKey, query: state.currentQuery, page: state.currentPage });
         }
     }
 
@@ -179,6 +190,7 @@ export async function fetchResults() {
             data = await fetchSearchResults(state.currentQuery, state.currentPage, pageSize, fields, state.searchFull || false);
 
             if (data.error) {
+                logWarn('search', 'FOFA 查询返回错误', { errmsg: data.errmsg, errcode: data.errcode, query: state.currentQuery });
                 showToast(`查询错误: ${data.errmsg}`, 'error');
                 loading.classList.remove('show');
                 emptyState.style.display = 'block';
@@ -195,6 +207,7 @@ export async function fetchResults() {
             // 记录 API 调用统计
             incrementApiCalls(data.consumed_fpoint || 0);
         } catch (error) {
+            logError('search', '搜索请求网络错误', { message: error.message, query: state.currentQuery });
             showToast(`网络错误: ${error.message}`, 'error');
             loading.classList.remove('show');
             emptyState.style.display = 'block';
@@ -206,6 +219,13 @@ export async function fetchResults() {
 
     state.results = data.results || [];
     state.totalResults = data.size || 0;
+    logInfo('search', '搜索结果渲染', {
+        query: state.currentQuery,
+        fromCache,
+        resultCount: state.results.length,
+        totalResults: state.totalResults,
+        elapsedMs: Date.now() - state.startTime
+    });
 
     // 更新统计信息
     document.getElementById('totalResults').textContent = formatNumber(state.totalResults);

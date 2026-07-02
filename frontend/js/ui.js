@@ -4,6 +4,7 @@ import { state, STORAGE_KEYS, FIELD_LABELS, DEFAULT_FIELDS, FIELDS_CONFIG, FILTE
 import { showToast, formatCacheExpiry, escapeHtml } from './utils.js';
 import { clearAllCache, getCacheStats, getCachedQueries, getAllCachedData, exportToCSV, exportToJSON } from './storage.js';
 import { setProxyConfig, getProxyConfig as getTauriProxyConfig, setRequestConfig, getRequestConfig } from './tauri-bridge.js';
+import { getLogs, clearLogs, exportLogs, isLoggingEnabled, getLogLevel, info as logInfo, warn as logWarn } from './logger.js';
 
 // 延迟导入 search.js 中的函数，避免循环依赖
 let _updateSearchButtonState = null;
@@ -102,6 +103,13 @@ export function showSettingsModal() {
         }
     }).catch(() => {});
 
+    // 加载诊断日志设置
+    const loggingEnabled = document.getElementById('loggingEnabled');
+    const loggingLevel = document.getElementById('loggingLevel');
+    if (loggingEnabled) loggingEnabled.checked = isLoggingEnabled();
+    if (loggingLevel) loggingLevel.value = getLogLevel();
+    renderLogViewer();
+
     // 异步从 Rust 侧获取最新请求配置
     getRequestConfig().then(config => {
         if (config) {
@@ -118,6 +126,48 @@ export function showSettingsModal() {
 
 export function closeSettingsModal() {
     document.getElementById('settingsModal').classList.remove('show');
+}
+
+export function renderLogViewer() {
+    const viewer = document.getElementById('logViewer');
+    if (!viewer) return;
+    const logs = getLogs().slice(-100).reverse();
+    if (logs.length === 0) {
+        viewer.innerHTML = '<div class="log-empty">日志未启用或暂无日志</div>';
+        return;
+    }
+    viewer.innerHTML = logs.map(entry => `
+        <div class="log-entry log-${escapeHtml(entry.level)}">
+            <div class="log-entry-head">
+                <span class="log-level">${escapeHtml(entry.level)}</span>
+                <span class="log-module">${escapeHtml(entry.module)}</span>
+                <span class="log-time">${escapeHtml(entry.time)}</span>
+            </div>
+            <div class="log-message">${escapeHtml(entry.message)}</div>
+            ${entry.details ? `<pre class="log-details">${escapeHtml(JSON.stringify(entry.details, null, 2))}</pre>` : ''}
+        </div>
+    `).join('');
+}
+
+export function clearDiagnosticLogs() {
+    clearLogs();
+    renderLogViewer();
+    showToast('诊断日志已清空', 'success');
+}
+
+export function exportDiagnosticLogs() {
+    const content = exportLogs();
+    const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    link.href = url;
+    link.download = `fofa_logs_${timestamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('诊断日志已导出', 'success');
 }
 
 export function saveSettingsApiKey() {
@@ -159,13 +209,21 @@ export async function saveProxySettings() {
     localStorage.setItem(STORAGE_KEYS.proxyPort, port.toString());
     localStorage.setItem(STORAGE_KEYS.proxyUsername, username);
     localStorage.setItem(STORAGE_KEYS.proxyPassword, password);
+    logInfo('proxy', '保存代理设置', {
+        host,
+        port,
+        usernamePresent: !!username,
+        passwordPresent: !!password
+    });
 
     // 同步到 Rust 侧（Tauri 环境）
     try {
         const result = await setProxyConfig(host, port, username, password);
         console.log('[Proxy]', result);
+        logInfo('proxy', '代理设置已同步到 Rust', { result });
     } catch (e) {
         console.warn('[Proxy] 同步到 Rust 侧失败（非 Tauri 环境可忽略）:', e);
+        logWarn('proxy', '代理设置同步到 Rust 失败', { message: e.message || String(e) });
     }
 
     if (host && port) {
@@ -300,7 +358,9 @@ function getConfigObject() {
             proxyPassword: localStorage.getItem(STORAGE_KEYS.proxyPassword) || '',
             userAgent: localStorage.getItem(STORAGE_KEYS.userAgent) || '',
             customHeaders: localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}',
-            favorites: localStorage.getItem(STORAGE_KEYS.favorites) || '[]'
+            favorites: localStorage.getItem(STORAGE_KEYS.favorites) || '[]',
+            loggingEnabled: localStorage.getItem(STORAGE_KEYS.loggingEnabled) || 'false',
+            loggingLevel: localStorage.getItem(STORAGE_KEYS.loggingLevel) || 'info'
         }
     };
 }
@@ -381,6 +441,8 @@ function applyConfig(config, source) {
     if (data.cacheTimeUnit) localStorage.setItem(STORAGE_KEYS.cacheTimeUnit, data.cacheTimeUnit);
     if (data.pageSize) localStorage.setItem(STORAGE_KEYS.pageSize, data.pageSize);
     if (data.activeFilters) localStorage.setItem(STORAGE_KEYS.activeFilters, data.activeFilters);
+    if (data.loggingEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.loggingEnabled, data.loggingEnabled);
+    if (data.loggingLevel) localStorage.setItem(STORAGE_KEYS.loggingLevel, data.loggingLevel);
 
     // 兼容新旧配置：v2 使用 dataRange，v1 使用 timeRange + resultMode
     if (data.dataRange) {

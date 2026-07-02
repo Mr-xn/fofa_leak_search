@@ -2,6 +2,7 @@
 
 import { showToast } from './utils.js';
 import { updateFilterInput } from './ui.js';
+import { info as logInfo, error as logError } from './logger.js';
 
 // ==================== 32-bit 整数运算辅助 ====================
 
@@ -229,8 +230,10 @@ export async function fetchIconFromUrl() {
     }
 
     showToast('正在获取 favicon...', 'info');
+    logInfo('iconhash', '开始获取 favicon', { url });
     try {
         const response = await fetch(url);
+        logInfo('iconhash', 'favicon 响应', { url, status: response.status, ok: response.ok });
         if (!response.ok) {
             showToast(`获取失败: HTTP ${response.status}`, 'error');
             return;
@@ -238,9 +241,11 @@ export async function fetchIconFromUrl() {
         const buffer = await response.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         const hash = computeIconHash(bytes);
+        logInfo('iconhash', 'favicon hash 计算完成', { url, byteLength: bytes.length, hash });
         showIconHashResult(hash);
         showToast('计算完成', 'success');
     } catch (e) {
+        logError('iconhash', 'favicon 获取失败', { url, message: e.message || String(e) });
         showToast(`获取失败: ${e.message}`, 'error');
     }
 }

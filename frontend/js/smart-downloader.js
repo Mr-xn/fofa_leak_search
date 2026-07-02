@@ -5,6 +5,7 @@ import { state, SMART_DOWNLOAD_HARD_LIMIT, VIP_MONTHLY_DATA_QUOTA, VIP_LEVEL_MAP
 import { fetchStats, fetchSearchResults } from './api.js';
 import { incrementApiCalls, getUsageStats, incrementDataCount } from './storage.js';
 import { isTauri } from './tauri-bridge.js';
+import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
 
 // ==================== 常量 ====================
 
@@ -117,12 +118,19 @@ export function getFreeLimit() {
  * @returns {Promise<number>} 匹配总数，错误时返回 -1
  */
 export async function estimateQuerySize(query) {
+    logInfo('smartdl', '开始估算查询结果数量', { query });
     try {
         const result = await fetchStats(query, '');
         incrementApiCalls();
-        if (result.error) return -1;
-        return result.size ?? -1;
-    } catch {
+        if (result.error) {
+            logWarn('smartdl', '估算查询结果数量失败（API 错误）', { query, errmsg: result.errmsg });
+            return -1;
+        }
+        const size = result.size ?? -1;
+        logInfo('smartdl', '查询结果数量估算完成', { query, size });
+        return size;
+    } catch (e) {
+        logError('smartdl', '估算查询结果数量异常', { query, message: e.message || String(e) });
         return -1;
     }
 }
@@ -135,13 +143,20 @@ export async function estimateQuerySize(query) {
  * @returns {Promise<Object|null>} 统计数据对象（含 size、distinct、aggs），错误时返回 null
  */
 export async function analyzeDimensions(query) {
+    logInfo('smartdl', '开始分析查询维度分布', { query, fields: PLANNABLE_FIELDS.join(',') });
     try {
         const fields = PLANNABLE_FIELDS.join(',');
         const result = await fetchStats(query, fields);
         incrementApiCalls();
-        if (result.error) return null;
+        if (result.error) {
+            logWarn('smartdl', '维度分析失败（API 错误）', { query, errmsg: result.errmsg });
+            return null;
+        }
+        const dimCount = result.aggs ? Object.keys(result.aggs).length : 0;
+        logInfo('smartdl', '维度分析完成', { query, totalSize: result.size, dimensionCount: dimCount });
         return result;
-    } catch {
+    } catch (e) {
+        logError('smartdl', '维度分析异常', { query, message: e.message || String(e) });
         return null;
     }
 }
@@ -509,8 +524,7 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
                 lastError = errDetail.msg;
                 if (errDetail.code) lastError += ` (code: ${errDetail.code})`;
 
-                console.warn(`[SmartDL] Step ${stepIndex + 1}/${totalSteps} attempt ${attempt} API error:`, JSON.stringify(errDetail));
-                console.warn(`[SmartDL] Query: ${step.query}`);
+                logWarn('smartdl', `步骤 ${stepIndex + 1}/${totalSteps} 第 ${attempt} 次尝试 API 错误`, { query: step.query, errDetail, attempt, maxRetries: MAX_RETRIES });
 
                 if (attempt < MAX_RETRIES) {
                     const backoffMs = attempt * 2000; // 2s, 4s, 6s
@@ -525,15 +539,14 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
                 step.status = 'done';
                 step.retryCount = undefined;
                 allResults.push(step.results);
-                console.log(`[SmartDL] Step ${stepIndex + 1}/${totalSteps} done: ${step.results.length} items`);
+                logInfo('smartdl', `步骤 ${stepIndex + 1}/${totalSteps} 完成`, { query: step.query, resultCount: step.results.length, attempt });
                 return;
             }
         } catch (err) {
             lastError = err.name === 'AbortError'
                 ? `请求超时 (${REQUEST_TIMEOUT_MS / 1000}s)`
                 : (err.message || '网络错误');
-            console.warn(`[SmartDL] Step ${stepIndex + 1}/${totalSteps} attempt ${attempt} error: ${lastError}`);
-            console.warn(`[SmartDL] Query: ${step.query}`);
+            logWarn('smartdl', `步骤 ${stepIndex + 1}/${totalSteps} 第 ${attempt} 次尝试网络错误`, { query: step.query, error: lastError, attempt, maxRetries: MAX_RETRIES });
 
             if (attempt < MAX_RETRIES) {
                 const backoffMs = attempt * 2000;
@@ -546,10 +559,9 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
     }
 
     // 所有重试均失败
-    step.status = 'error';
     step.errorMsg = lastError || '请求失败';
     step.retryCount = undefined;
-    console.error(`[SmartDL] Step ${stepIndex + 1}/${totalSteps} failed after ${MAX_RETRIES} attempts: ${step.errorMsg}`);
+    logError('smartdl', `步骤 ${stepIndex + 1}/${totalSteps} 失败（已重试 ${MAX_RETRIES} 次）`, { query: step.query, error: step.errorMsg });
 }
 
 /**
@@ -562,6 +574,8 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
  */
 export async function executePlan(baseQuery, planSteps, selectedFields, onProgress) {
     const freeLimit = getFreeLimit();
+
+    logInfo('smartdl', '开始执行查询计划', { baseQuery, totalSteps: planSteps.length, pendingSteps: planSteps.filter(s => s.status === 'pending').length, freeLimit, selectedFields });
 
     // 确保 selectedFields 包含 dedup key
     const fieldsArr = selectedFields.split(',').map(f => f.trim());
@@ -593,12 +607,23 @@ export async function executePlan(baseQuery, planSteps, selectedFields, onProgre
     const mergedResults = await mergeAndDedup(allResults, dedupFieldIndex);
 
     const stepsCompleted = planSteps.filter(s => s.status === 'done').length;
+    const stepsFailed = planSteps.filter(s => s.status === 'error').length;
     const totalFetched = allResults.reduce((sum, r) => sum + r.length, 0);
 
     // 记录当月数据获取量
     if (mergedResults.length > 0) {
         incrementDataCount(mergedResults.length);
     }
+
+    logInfo('smartdl', '查询计划执行完成', {
+        baseQuery,
+        totalFetched,
+        uniqueCount: mergedResults.length,
+        duplicateCount: totalFetched - mergedResults.length,
+        stepsCompleted,
+        stepsFailed,
+        stepsTotal: planSteps.length
+    });
 
     return {
         mergedResults,
@@ -629,9 +654,10 @@ export async function mergeAndDedup(allResults, dedupFieldIndex) {
                 batches: allResults,
                 dedupKeyIndex: dedupFieldIndex
             });
+            logInfo('smartdl', 'Rust 去重完成', { batchCount: allResults.length, resultCount: result.rows?.length });
             return result.rows;
         } catch (e) {
-            console.warn('[SmartDownloader] Rust dedup failed, falling back to JS:', e);
+            logWarn('smartdl', 'Rust 去重失败，降级到 JS 实现', { message: e.message || String(e), batchCount: allResults.length });
         }
     }
 

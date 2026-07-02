@@ -2,6 +2,7 @@
 
 import { state, DB_CONFIG, STORAGE_KEYS } from './config.js';
 import { getCacheExpiry } from './utils.js';
+import { debug as logDebug, info as logInfo, warn as logWarn } from './logger.js';
 
 // ==================== IndexedDB 初始化 ====================
 export function initIndexedDB() {
@@ -9,10 +10,12 @@ export function initIndexedDB() {
         const request = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
 
         request.onerror = () => {
+            logWarn('cache', 'IndexedDB 初始化失败', { db: DB_CONFIG.name });
             resolve(null);
         };
 
         request.onsuccess = () => {
+            logInfo('cache', 'IndexedDB 初始化成功', { db: DB_CONFIG.name });
             resolve(request.result);
         };
 
@@ -47,8 +50,10 @@ export function getFromCache(cacheKey) {
                 const result = request.result;
                 const cacheExpiry = getCacheExpiry();
                 if (result && (Date.now() - result.timestamp) < cacheExpiry) {
+                    logDebug('cache', '读取缓存命中', { cacheKey, ageMs: Date.now() - result.timestamp });
                     resolve(result);
                 } else {
+                    logDebug('cache', result ? '读取缓存过期' : '读取缓存未命中', { cacheKey });
                     resolve(null);
                 }
             };
@@ -74,8 +79,8 @@ export function saveToCache(cacheKey, query, data) {
                 data: data,
                 timestamp: Date.now()
             });
-            tx.oncomplete = () => resolve(true);
-            tx.onerror = () => resolve(false);
+            tx.oncomplete = () => { logDebug('cache', '保存缓存成功', { cacheKey, query, totalSize: data?.size, resultCount: Array.isArray(data?.results) ? data.results.length : 0 }); resolve(true); };
+            tx.onerror = () => { logWarn('cache', '保存缓存失败', { cacheKey, query }); resolve(false); };
         } catch (e) {
             resolve(false);
         }

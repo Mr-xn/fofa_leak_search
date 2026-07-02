@@ -11,7 +11,7 @@ import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey
          restoreFiltersFromData,
          exportConfigToFile, importConfigFromFile, toggleAdvanced, setSearchButtonUpdater,
          showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings,
-         resetUserAgent, saveRequestConfig } from './ui.js';
+         resetUserAgent, saveRequestConfig, renderLogViewer, clearDiagnosticLogs, exportDiagnosticLogs } from './ui.js';
 import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchResults, updateSearchButtonState } from './search.js';
 import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults } from './results.js';
 import { showUserInfo, refreshUserInfo } from './user-info.js';
@@ -23,6 +23,7 @@ import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFile
 import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
 import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
 import { getSelectedFields } from './ui.js';
+import { setLoggingEnabled, setLogLevel, info as logInfo, warn as logWarn, error as logError } from './logger.js';
 
 // ==================== 全局函数导出 ====================
 // HTML 中的 onclick 需要访问这些函数
@@ -845,7 +846,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     await setProxyConfig(savedHost, savedPort, savedUser, savedPass);
                     console.log('[Init] Proxy config restored:', savedHost, savedPort);
-                } catch (e) { console.warn('[Init] Failed to restore proxy config:', e); }
+                    logInfo('proxy', '启动时恢复代理配置成功', { host: savedHost, port: savedPort, usernamePresent: !!savedUser, passwordPresent: !!savedPass });
+                } catch (e) { console.warn('[Init] Failed to restore proxy config:', e); logWarn('proxy', '启动时恢复代理配置失败', { message: e.message || String(e) }); }
             }
 
             // 恢复请求配置（User-Agent + 自定义 Headers）
@@ -856,10 +858,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     await setRequestConfig(savedUA, savedHeaders);
                     console.log('[Init] Request config restored');
-                } catch (e) { console.warn('[Init] Failed to restore request config:', e); }
+                    logInfo('request', '启动时恢复请求配置成功', { userAgentPresent: !!savedUA, headerCount: Object.keys(savedHeaders).length });
+                } catch (e) { console.warn('[Init] Failed to restore request config:', e); logWarn('request', '启动时恢复请求配置失败', { message: e.message || String(e) }); }
             }
         }
     } catch (e) {
+        logError('init', 'Tauri/桌面环境初始化失败', { message: e.message || String(e), isTauri: isTauri() });
         if (isTauri()) {
             showToast('桌面环境初始化失败: ' + e.message, 'error');
         }
@@ -1050,6 +1054,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // 诊断日志设置
+    const loggingEnabledToggle = document.getElementById('loggingEnabled');
+    if (loggingEnabledToggle) {
+        loggingEnabledToggle.addEventListener('change', () => {
+            setLoggingEnabled(loggingEnabledToggle.checked);
+            logInfo('settings', loggingEnabledToggle.checked ? '诊断日志已启用' : '诊断日志已关闭');
+            renderLogViewer();
+        });
+    }
+    const loggingLevelSelect = document.getElementById('loggingLevel');
+    if (loggingLevelSelect) {
+        loggingLevelSelect.addEventListener('change', () => {
+            setLogLevel(loggingLevelSelect.value);
+            logInfo('settings', `日志等级已设置为 ${loggingLevelSelect.value}`);
+            renderLogViewer();
+        });
+    }
+    document.getElementById('refreshLogsBtn')?.addEventListener('click', renderLogViewer);
+    document.getElementById('clearLogsBtn')?.addEventListener('click', clearDiagnosticLogs);
+    document.getElementById('exportLogsBtn')?.addEventListener('click', exportDiagnosticLogs);
+
     // 点击外部关闭账户信息面板
     document.addEventListener('click', (e) => {
         const panel = document.getElementById('userInfoPanel');
@@ -1136,6 +1161,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else if (cancelBtn) {
                     const searchText = document.getElementById('favSearchInput')?.value || '';
                     renderFavoritesList(searchText);
+                }
+                return;
+            }
+            // 用户自定义标签快捷移除（只影响当前规则）
+            const tagRemoveBtn = e.target.closest('.fav-tag-chip-remove');
+            if (tagRemoveBtn) {
+                e.stopPropagation();
+                const idx = parseInt(tagRemoveBtn.dataset.tagIndex, 10);
+                const tag = tagRemoveBtn.dataset.tag;
+                const entry = getRenderedFavorite(idx);
+                if (entry && !entry.system && tag) {
+                    const tags = Array.isArray(entry.tags) ? entry.tags : ['用户'];
+                    updateFavoriteTags(entry.baseQuery, tags.filter(t => t !== tag));
+                    const searchText = document.getElementById('favSearchInput')?.value || '';
+                    renderFavoritesList(searchText);
+                    updateFavCount();
                 }
                 return;
             }
