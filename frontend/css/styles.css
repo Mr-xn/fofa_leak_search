@@ -3261,6 +3261,62 @@ tr:last-child td {
         border-color: var(--primary);
     }
 
+    /* ========== 诊断日志 ========== */
+    .log-viewer {
+        max-height: 220px;
+        overflow-y: auto;
+        margin-top: 10px;
+        padding: 8px;
+        background: var(--bg);
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        font-size: 11px;
+    }
+    .log-empty {
+        color: var(--text-muted);
+        text-align: center;
+        padding: 12px;
+    }
+    .log-entry {
+        padding: 8px;
+        border-bottom: 1px solid var(--border-light);
+    }
+    .log-entry:last-child { border-bottom: 0; }
+    .log-entry-head {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 4px;
+        color: var(--text-muted);
+    }
+    .log-level {
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .log-error .log-level { color: var(--error); }
+    .log-warn .log-level { color: var(--warning); }
+    .log-info .log-level { color: var(--primary); }
+    .log-debug .log-level { color: var(--text-muted); }
+    .log-module {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--text-secondary);
+    }
+    .log-time { margin-left: auto; }
+    .log-message {
+        color: var(--text);
+        line-height: 1.5;
+    }
+    .log-details {
+        margin: 6px 0 0;
+        padding: 6px;
+        background: var(--card);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 10px;
+    }
+
     /* ========== 更新提示横幅 ========== */
     .update-banner {
         display: flex;
