@@ -1768,12 +1768,22 @@ td.ipv6-cell {
     font-size: 12px;
 }
 
+/* link 列显示完整 URL：覆盖 td 的 nowrap/ellipsis */
+td.link-cell {
+    max-width: 520px !important;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.45;
+}
+
 /* 表格内可点击链接 */
 .cell-link {
     color: var(--primary);
     text-decoration: none;
     cursor: pointer;
     word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 .cell-link:hover {
@@ -3084,8 +3094,9 @@ tr:last-child td {
     .fav-tag-option-row .fav-tag-option {
         flex: 1;
     }
+    .fav-tag-edit,
     .fav-tag-del {
-        display: none;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 20px;
@@ -3097,16 +3108,17 @@ tr:last-child td {
         color: var(--text-muted);
         cursor: pointer;
         flex-shrink: 0;
+        opacity: 0.75;
     }
-    .fav-tag-option-row:hover .fav-tag-del {
-        display: flex;
+    .fav-tag-edit:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        opacity: 1;
     }
     .fav-tag-del:hover {
         background: rgba(239, 68, 68, 0.1);
         color: var(--error);
-    }
-    .fav-tag-rename-input {
-        outline: none;
+        opacity: 1;
     }
     .fav-tag-empty {
         padding: 8px;
