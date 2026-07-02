@@ -17,7 +17,7 @@ import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownlo
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
 import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
-import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, deleteCustomTag, renameCustomTag } from './favorites.js';
+import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, renameCustomTag } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter } from './icon-hash.js';
 import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
@@ -632,20 +632,23 @@ async function _showTagPopover(anchor, entry, idx) {
                 editBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const newName = prompt(`重命名标签 #${tag}`, tag)?.trim();
+                    const newName = prompt(`重命名分组标签 #${tag}（将同步修改所有用户收藏）`, tag)?.trim();
                     if (!newName || newName === tag) return;
+
+                    // 重命名是分组级操作：同步修改所有用户收藏里的同名自定义标签
                     const changed = renameCustomTag(tag, newName);
-                    if (changed > 0) {
-                        const s = document.getElementById('favSearchInput')?.value || '';
-                        renderFavoritesList(s);
-                        allTags.delete(tag);
-                        allTags.add(newName);
-                        sortedTags.length = 0;
-                        sortedTags.push(...[...allTags].sort());
-                        const idx = currentTags.indexOf(tag);
-                        if (idx >= 0) currentTags[idx] = newName;
-                        renderTagOptions(filterInput.value);
-                    }
+                    if (changed === 0) return;
+
+                    const s = document.getElementById('favSearchInput')?.value || '';
+                    renderFavoritesList(s);
+
+                    allTags.delete(tag);
+                    allTags.add(newName);
+                    sortedTags.length = 0;
+                    sortedTags.push(...[...allTags].sort());
+                    const idx = currentTags.indexOf(tag);
+                    if (idx >= 0) currentTags[idx] = newName;
+                    renderTagOptions(filterInput.value);
                 });
                 row.appendChild(editBtn);
 
@@ -655,15 +658,22 @@ async function _showTagPopover(anchor, entry, idx) {
                 delBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
                 delBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (confirm(`确定删除标签 #${tag}？将从所有用户收藏中移除此标签。`)) {
-                        deleteCustomTag(tag);
+                    if (confirm(`确定从当前规则移除标签 #${tag}？`)) {
+                        // 仅从当前收藏规则移除此标签，不影响其他规则同名标签
+                        const newTags = currentTags.filter(t => t !== tag);
+                        updateFavoriteTags(entry.baseQuery, newTags);
+
                         const s = document.getElementById('favSearchInput')?.value || '';
                         renderFavoritesList(s);
-                        allTags.delete(tag);
-                        sortedTags.length = 0;
-                        sortedTags.push(...[...allTags].sort());
+
                         const idx = currentTags.indexOf(tag);
                         if (idx >= 0) currentTags.splice(idx, 1);
+                        const stillUsed = state.favorites.some(f => !f.system && Array.isArray(f.tags) && f.tags.includes(tag));
+                        if (!stillUsed) {
+                            allTags.delete(tag);
+                            sortedTags.length = 0;
+                            sortedTags.push(...[...allTags].sort());
+                        }
                         renderTagOptions(filterInput.value);
                     }
                 });
