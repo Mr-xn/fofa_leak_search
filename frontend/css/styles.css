@@ -1747,7 +1747,7 @@ th .resize-handle.active {
 td {
     padding: 9px 14px;
     border-bottom: 1px solid var(--border-light);
-    max-width: 280px;
+    max-width: 480px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3076,6 +3076,37 @@ tr:last-child td {
     .fav-tag-list {
         max-height: 140px;
         overflow-y: auto;
+    }
+    .fav-tag-option-row {
+        display: flex;
+        align-items: center;
+    }
+    .fav-tag-option-row .fav-tag-option {
+        flex: 1;
+    }
+    .fav-tag-del {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: none;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .fav-tag-option-row:hover .fav-tag-del {
+        display: flex;
+    }
+    .fav-tag-del:hover {
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--error);
+    }
+    .fav-tag-rename-input {
+        outline: none;
     }
     .fav-tag-empty {
         padding: 8px;
