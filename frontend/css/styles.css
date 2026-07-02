@@ -1747,7 +1747,7 @@ th .resize-handle.active {
 td {
     padding: 9px 14px;
     border-bottom: 1px solid var(--border-light);
-    max-width: 480px;
+    max-width: 280px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
