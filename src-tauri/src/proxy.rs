@@ -395,11 +395,9 @@ async fn proxy_request(
     let mut url = format!("https://{}/{}", FOFA_HOST, api_path);
     if let Some(p) = params {
         if !p.is_empty() {
-            let qs: String = p
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<_>>()
-                .join("&");
+            let qs = url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(p.iter())
+                .finish();
             url = format!("{}?{}", url, qs);
         }
     }
