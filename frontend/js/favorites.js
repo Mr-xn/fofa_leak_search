@@ -362,7 +362,11 @@ function _renderChips(tags) {
 function _renderUserTags(fav, index) {
     const tags = Array.isArray(fav.tags) ? fav.tags : ['用户'];
     if (tags.length === 0) return '';
-    const chips = tags.map(t => `<span class="fav-tag-chip" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</span>`).join('');
+    const builtin = _getBuiltinTags();
+    const chips = tags.map(t => {
+        const canQuickRemove = t !== '用户' && !builtin.has(t);
+        return `<span class="fav-tag-chip${canQuickRemove ? ' fav-tag-chip-removable' : ''}" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}${canQuickRemove ? `<button class="fav-tag-chip-remove" data-tag-index="${index}" data-tag="${escapeHtml(t)}" title="从当前规则移除此标签">×</button>` : ''}</span>`;
+    }).join('');
     return `<div class="fav-user-tags">
         ${chips}
         <button class="fav-tag-add" data-tag-index="${index}" title="编辑标签分组">
