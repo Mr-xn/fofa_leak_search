@@ -3094,8 +3094,7 @@ tr:last-child td {
     .fav-tag-option-row .fav-tag-option {
         flex: 1;
     }
-    .fav-tag-edit,
-    .fav-tag-del {
+    .fav-tag-edit {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -3115,10 +3114,48 @@ tr:last-child td {
         color: var(--primary);
         opacity: 1;
     }
-    .fav-tag-del:hover {
-        background: rgba(239, 68, 68, 0.1);
-        color: var(--error);
-        opacity: 1;
+    .fav-tag-option-row.is-editing {
+        gap: 4px;
+    }
+    .fav-tag-inline-input {
+        flex: 1;
+        min-width: 0;
+        padding: 4px 7px;
+        font-size: 11px;
+        border: 1px solid var(--primary);
+        border-radius: 4px;
+        background: var(--card);
+        color: var(--text);
+        outline: none;
+    }
+    .fav-tag-inline-save,
+    .fav-tag-inline-cancel {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .fav-tag-inline-save {
+        background: var(--primary-light);
+        color: var(--primary);
+    }
+    .fav-tag-inline-save:hover {
+        background: var(--primary);
+        color: #fff;
+    }
+    .fav-tag-inline-cancel {
+        background: transparent;
+        color: var(--text-muted);
+    }
+    .fav-tag-inline-cancel:hover {
+        background: var(--bg);
+        color: var(--text);
     }
     .fav-tag-empty {
         padding: 8px;
