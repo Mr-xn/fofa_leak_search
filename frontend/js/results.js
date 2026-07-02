@@ -179,9 +179,10 @@ function formatCell(value, field) {
         const displayText = escapeHtml(value);
         const hrefSafe = value.replace(/"/g, '%22');
         const titleSafe = escapeHtml(value);
+        const encodedUrl = encodeURIComponent(value);
         return `<a class="cell-link" href="${hrefSafe}" 
-                   onclick="event.preventDefault();event.stopPropagation();window.openUrl(this.getAttribute('data-fullurl'))"
-                   data-fullurl="${titleSafe}"
+                   onclick="event.preventDefault();event.stopPropagation();window.openUrl(decodeURIComponent(this.dataset.fullurl))"
+                   data-fullurl="${encodedUrl}"
                    title="${titleSafe}">${displayText}</a>`;
     }
 
