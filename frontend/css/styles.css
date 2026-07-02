@@ -3012,6 +3012,7 @@ tr:last-child td {
     .fav-tag-chip {
         display: inline-flex;
         align-items: center;
+        gap: 3px;
         padding: 1px 7px;
         font-size: 10px;
         font-weight: 500;
@@ -3021,6 +3022,33 @@ tr:last-child td {
         border-radius: 10px;
         line-height: 1.6;
         white-space: nowrap;
+    }
+    .fav-tag-chip-removable:hover {
+        border-color: rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.06);
+        color: var(--text);
+    }
+    .fav-tag-chip-remove {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 13px;
+        height: 13px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 11px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .fav-tag-chip-removable:hover .fav-tag-chip-remove {
+        display: inline-flex;
+    }
+    .fav-tag-chip-remove:hover {
+        background: rgba(239, 68, 68, 0.16);
+        color: var(--error);
     }
     .fav-tag-add {
         display: inline-flex;
