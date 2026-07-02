@@ -624,60 +624,53 @@ async function _showTagPopover(anchor, entry, idx) {
             opt.textContent = `#${tag}`;
             row.appendChild(opt);
 
-            // 自定义标签：删除按钮 + 双击重命名
+            // 自定义标签：显示重命名按钮；取消当前规则标签直接点击标签本身即可
             if (custom) {
                 const editBtn = document.createElement('button');
                 editBtn.className = 'fav-tag-edit';
-                editBtn.title = '重命名此标签';
+                editBtn.title = '重命名此分组标签（同步修改所有用户收藏）';
                 editBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const newName = prompt(`重命名分组标签 #${tag}（将同步修改所有用户收藏）`, tag)?.trim();
-                    if (!newName || newName === tag) return;
+                    row.classList.add('is-editing');
+                    row.innerHTML = `
+                        <input class="fav-tag-inline-input" value="${escapeHtml(tag)}" aria-label="重命名标签">
+                        <button class="fav-tag-inline-save" title="保存">✓</button>
+                        <button class="fav-tag-inline-cancel" title="取消">×</button>
+                    `;
 
-                    // 重命名是分组级操作：同步修改所有用户收藏里的同名自定义标签
-                    const changed = renameCustomTag(tag, newName);
-                    if (changed === 0) return;
+                    const input = row.querySelector('.fav-tag-inline-input');
+                    const saveBtn = row.querySelector('.fav-tag-inline-save');
+                    const cancelBtn = row.querySelector('.fav-tag-inline-cancel');
+                    const commitRename = () => {
+                        const newName = input.value.trim();
+                        if (!newName || newName === tag) { renderTagOptions(filterInput.value); return; }
 
-                    const s = document.getElementById('favSearchInput')?.value || '';
-                    renderFavoritesList(s);
-
-                    allTags.delete(tag);
-                    allTags.add(newName);
-                    sortedTags.length = 0;
-                    sortedTags.push(...[...allTags].sort());
-                    const idx = currentTags.indexOf(tag);
-                    if (idx >= 0) currentTags[idx] = newName;
-                    renderTagOptions(filterInput.value);
-                });
-                row.appendChild(editBtn);
-
-                const delBtn = document.createElement('button');
-                delBtn.className = 'fav-tag-del';
-                delBtn.title = '删除此标签';
-                delBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-                delBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm(`确定从当前规则移除标签 #${tag}？`)) {
-                        // 仅从当前收藏规则移除此标签，不影响其他规则同名标签
-                        const newTags = currentTags.filter(t => t !== tag);
-                        updateFavoriteTags(entry.baseQuery, newTags);
+                        // 重命名是分组级操作：同步修改所有用户收藏里的同名自定义标签
+                        const changed = renameCustomTag(tag, newName);
+                        if (changed === 0) { renderTagOptions(filterInput.value); return; }
 
                         const s = document.getElementById('favSearchInput')?.value || '';
                         renderFavoritesList(s);
 
+                        allTags.delete(tag);
+                        allTags.add(newName);
+                        sortedTags.length = 0;
+                        sortedTags.push(...[...allTags].sort());
                         const idx = currentTags.indexOf(tag);
-                        if (idx >= 0) currentTags.splice(idx, 1);
-                        const stillUsed = state.favorites.some(f => !f.system && Array.isArray(f.tags) && f.tags.includes(tag));
-                        if (!stillUsed) {
-                            allTags.delete(tag);
-                            sortedTags.length = 0;
-                            sortedTags.push(...[...allTags].sort());
-                        }
+                        if (idx >= 0) currentTags[idx] = newName;
                         renderTagOptions(filterInput.value);
-                    }
+                    };
+                    input.focus();
+                    input.select();
+                    saveBtn.addEventListener('click', (ev) => { ev.stopPropagation(); commitRename(); });
+                    cancelBtn.addEventListener('click', (ev) => { ev.stopPropagation(); renderTagOptions(filterInput.value); });
+                    input.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter') { ev.preventDefault(); commitRename(); }
+                        if (ev.key === 'Escape') { renderTagOptions(filterInput.value); }
+                    });
                 });
-                row.appendChild(delBtn);
+                row.appendChild(editBtn);
             }
 
             tagList.appendChild(row);
