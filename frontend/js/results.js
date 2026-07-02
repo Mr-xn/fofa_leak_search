@@ -88,6 +88,25 @@ function formatIPv6(value) {
 }
 
 // ==================== 表格渲染 ====================
+
+/**
+ * FOFA 的 link 字段有时会返回展示用的中间省略值（如 http://foo-...bar.com）。
+ * 同一行 host 字段若是完整主机名，则用协议 + host 恢复可点击链接。
+ * @param {string} linkValue
+ * @param {Array} row
+ * @param {Array<string>} fields
+ * @returns {string}
+ */
+export function recoverEllipsizedLink(linkValue, row, fields) {
+    if (!linkValue || typeof linkValue !== 'string' || !linkValue.includes('...')) return linkValue;
+    const hostIndex = fields.indexOf('host');
+    if (hostIndex === -1 || !row || !row[hostIndex]) return linkValue;
+    const host = String(row[hostIndex]).trim();
+    if (!host || host.includes('...')) return linkValue;
+    const protocol = linkValue.match(/^https:\/\//i) ? 'https://' : 'http://';
+    return `${protocol}${host}`;
+}
+
 // 根据字段类型估算合适的列宽
 function getColumnWidth(field, totalFields) {
     // 当字段较少时给更宽的默认值，字段多时用紧凑宽度
@@ -154,10 +173,11 @@ export function renderTable(fields) {
                 if (field === 'ip') cellClasses.push(isIpv6 ? 'ipv6-cell' : 'ip-cell');
                 if (field === 'link') cellClasses.push('link-cell');
                 const cellClass = cellClasses.join(' ');
-                const displayValue = isIpv6 ? formatIPv6(cell) : cell;
+                const recoveredCell = field === 'link' ? recoverEllipsizedLink(cell, row, fields) : cell;
+                const displayValue = isIpv6 ? formatIPv6(recoveredCell) : recoveredCell;
                 const colWidth = getColumnWidth(field, fields.length);
                 return `
-                    <td title="${escapeHtml(cell)}" class="${cellClass}" style="max-width: ${colWidth};">
+                    <td title="${escapeHtml(recoveredCell)}" class="${cellClass}" style="max-width: ${colWidth};">
                         ${formatCell(displayValue, field)}
                     </td>
                 `;
