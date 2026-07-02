@@ -171,10 +171,9 @@ function formatCell(value, field) {
 
     // link 字段：渲染为可点击链接，用系统默认浏览器打开
     if (field === 'link' && /^https?:\/\//i.test(value)) {
-        // 显示文本可以截断，但超链接必须使用完整 URL
-        const displayText = value.length > 50 ? escapeHtml(value.substring(0, 47)) + '...' : escapeHtml(value);
-        // href 使用 encodeURI 处理，避免 escapeHtml 破坏 URL 中的 & " 等字符
+        // 完整 URL 作为显示文本，CSS text-overflow: ellipsis 处理视觉截断
         // data-fullurl 存储原始 URL，onclick 通过 getAttribute 读取确保不被 HTML 实体破坏
+        const displayText = escapeHtml(value);
         const hrefSafe = value.replace(/"/g, '%22');
         const titleSafe = escapeHtml(value);
         return `<a class="cell-link" href="${hrefSafe}" 
