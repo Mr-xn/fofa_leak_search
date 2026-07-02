@@ -626,6 +626,29 @@ async function _showTagPopover(anchor, entry, idx) {
 
             // 自定义标签：删除按钮 + 双击重命名
             if (custom) {
+                const editBtn = document.createElement('button');
+                editBtn.className = 'fav-tag-edit';
+                editBtn.title = '重命名此标签';
+                editBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const newName = prompt(`重命名标签 #${tag}`, tag)?.trim();
+                    if (!newName || newName === tag) return;
+                    const changed = renameCustomTag(tag, newName);
+                    if (changed > 0) {
+                        const s = document.getElementById('favSearchInput')?.value || '';
+                        renderFavoritesList(s);
+                        allTags.delete(tag);
+                        allTags.add(newName);
+                        sortedTags.length = 0;
+                        sortedTags.push(...[...allTags].sort());
+                        const idx = currentTags.indexOf(tag);
+                        if (idx >= 0) currentTags[idx] = newName;
+                        renderTagOptions(filterInput.value);
+                    }
+                });
+                row.appendChild(editBtn);
+
                 const delBtn = document.createElement('button');
                 delBtn.className = 'fav-tag-del';
                 delBtn.title = '删除此标签';
@@ -636,7 +659,6 @@ async function _showTagPopover(anchor, entry, idx) {
                         deleteCustomTag(tag);
                         const s = document.getElementById('favSearchInput')?.value || '';
                         renderFavoritesList(s);
-                        // 更新 popover 标签列表
                         allTags.delete(tag);
                         sortedTags.length = 0;
                         sortedTags.push(...[...allTags].sort());
@@ -646,45 +668,6 @@ async function _showTagPopover(anchor, entry, idx) {
                     }
                 });
                 row.appendChild(delBtn);
-
-                // 双击标签名重命名
-                opt.addEventListener('dblclick', (e) => {
-                    e.preventDefault();
-                    const renameInput = document.createElement('input');
-                    renameInput.type = 'text';
-                    renameInput.className = 'fav-tag-rename-input';
-                    renameInput.value = tag;
-                    renameInput.style.cssText = 'position:absolute;inset:0;border:1px solid var(--primary);border-radius:4px;padding:0 6px;font-size:11px;background:var(--card);z-index:1;';
-                    opt.style.position = 'relative';
-                    opt.textContent = '';
-                    opt.appendChild(renameInput);
-                    renameInput.focus();
-                    renameInput.select();
-                    const doRename = () => {
-                        const newName = renameInput.value.trim();
-                        opt.textContent = `#${tag}`;
-                        if (newName && newName !== tag) {
-                            renameCustomTag(tag, newName);
-                            const s = document.getElementById('favSearchInput')?.value || '';
-                            renderFavoritesList(s);
-                            // 更新 popover
-                            allTags.delete(tag);
-                            allTags.add(newName);
-                            sortedTags.length = 0;
-                            sortedTags.push(...[...allTags].sort());
-                            const idx = currentTags.indexOf(tag);
-                            if (idx >= 0) currentTags[idx] = newName;
-                            renderTagOptions(filterInput.value);
-                        } else {
-                            opt.textContent = `#${tag}`;
-                        }
-                    };
-                    renameInput.addEventListener('blur', doRename);
-                    renameInput.addEventListener('keydown', (ev) => {
-                        if (ev.key === 'Enter') { ev.preventDefault(); renameInput.blur(); }
-                        if (ev.key === 'Escape') { opt.textContent = `#${tag}`; }
-                    });
-                });
             }
 
             tagList.appendChild(row);

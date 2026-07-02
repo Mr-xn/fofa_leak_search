@@ -150,7 +150,10 @@ export function renderTable(fields) {
             ${row.map((cell, cellIndex) => {
                 const field = fields[cellIndex];
                 const isIpv6 = isIPv6(cell);
-                const cellClass = field === 'ip' ? (isIpv6 ? 'ipv6-cell' : 'ip-cell') : '';
+                const cellClasses = [];
+                if (field === 'ip') cellClasses.push(isIpv6 ? 'ipv6-cell' : 'ip-cell');
+                if (field === 'link') cellClasses.push('link-cell');
+                const cellClass = cellClasses.join(' ');
                 const displayValue = isIpv6 ? formatIPv6(cell) : cell;
                 const colWidth = getColumnWidth(field, fields.length);
                 return `
