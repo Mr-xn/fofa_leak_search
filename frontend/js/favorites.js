@@ -169,6 +169,53 @@ export function updateFavoriteTags(baseQuery, tags) {
     return true;
 }
 
+/**
+ * 从所有用户收藏中删除指定标签（不影响系统规则和内置标签）
+ * @param {string} tag - 要删除的标签名
+ * @returns {number} 受影响的收藏数
+ */
+export function deleteCustomTag(tag) {
+    if (!tag || tag === '用户') return 0;
+    const builtin = _getBuiltinTags();
+    if (builtin.has(tag)) return 0;
+
+    let count = 0;
+    for (const f of state.favorites) {
+        if (f.system || !Array.isArray(f.tags)) continue;
+        const before = f.tags.length;
+        f.tags = f.tags.filter(t => t !== tag);
+        if (f.tags.length < before) count++;
+    }
+    if (count > 0) persistFavorites();
+    return count;
+}
+
+/**
+ * 重命名所有用户收藏中的自定义标签（不影响系统规则和内置标签）
+ * @param {string} oldTag - 旧标签名
+ * @param {string} newTag - 新标签名
+ * @returns {number} 受影响的收藏数
+ */
+export function renameCustomTag(oldTag, newTag) {
+    if (!oldTag || !newTag || !newTag.trim()) return 0;
+    if (oldTag === '用户' || newTag.trim() === '用户') return 0;
+    const builtin = _getBuiltinTags();
+    if (builtin.has(oldTag)) return 0;
+
+    const newName = newTag.trim();
+    let count = 0;
+    for (const f of state.favorites) {
+        if (f.system || !Array.isArray(f.tags)) continue;
+        if (!f.tags.includes(oldTag)) continue;
+        // 替换并去重
+        const replaced = f.tags.map(t => t === oldTag ? newName : t);
+        f.tags = [...new Set(replaced)];
+        count++;
+    }
+    if (count > 0) persistFavorites();
+    return count;
+}
+
 // ==================== 系统规则播种 ====================
 
 /**

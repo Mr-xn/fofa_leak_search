@@ -17,7 +17,7 @@ import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownlo
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
 import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
-import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags } from './favorites.js';
+import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, deleteCustomTag, renameCustomTag } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter } from './icon-hash.js';
 import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
@@ -584,10 +584,11 @@ async function _showTagPopover(anchor, entry, idx) {
 
     // 收集所有已知标签（FOFA_RULES + 当前收藏已使用的自定义标签）
     const allTags = new Set();
+    const builtinTags = new Set();
     try {
         const { FOFA_RULES } = await import('./fofa-rules.js');
         FOFA_RULES.forEach(r => {
-            if (Array.isArray(r.tags)) r.tags.forEach(t => allTags.add(t));
+            if (Array.isArray(r.tags)) r.tags.forEach(t => { allTags.add(t); builtinTags.add(t); });
         });
     } catch {}
     // 加入当前用户所有收藏中出现的标签
@@ -596,6 +597,9 @@ async function _showTagPopover(anchor, entry, idx) {
         if (!f.system && Array.isArray(f.tags)) f.tags.forEach(t => allTags.add(t));
     });
     const sortedTags = [...allTags].sort();
+
+    // 判断是否为自定义标签（非内置、非"用户"）
+    const isCustomTag = (tag) => tag !== '用户' && !builtinTags.has(tag);
 
     // 渲染标签选项
     function renderTagOptions(filter) {
@@ -610,11 +614,80 @@ async function _showTagPopover(anchor, entry, idx) {
         }
         filtered.forEach(tag => {
             const isActive = currentTags.includes(tag);
+            const custom = isCustomTag(tag);
+            const row = document.createElement('div');
+            row.className = 'fav-tag-option-row';
+
             const opt = document.createElement('button');
             opt.className = `fav-tag-option${isActive ? ' is-active' : ''}`;
             opt.dataset.tag = tag;
             opt.textContent = `#${tag}`;
-            tagList.appendChild(opt);
+            row.appendChild(opt);
+
+            // 自定义标签：删除按钮 + 双击重命名
+            if (custom) {
+                const delBtn = document.createElement('button');
+                delBtn.className = 'fav-tag-del';
+                delBtn.title = '删除此标签';
+                delBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`确定删除标签 #${tag}？将从所有用户收藏中移除此标签。`)) {
+                        deleteCustomTag(tag);
+                        const s = document.getElementById('favSearchInput')?.value || '';
+                        renderFavoritesList(s);
+                        // 更新 popover 标签列表
+                        allTags.delete(tag);
+                        sortedTags.length = 0;
+                        sortedTags.push(...[...allTags].sort());
+                        const idx = currentTags.indexOf(tag);
+                        if (idx >= 0) currentTags.splice(idx, 1);
+                        renderTagOptions(filterInput.value);
+                    }
+                });
+                row.appendChild(delBtn);
+
+                // 双击标签名重命名
+                opt.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    const renameInput = document.createElement('input');
+                    renameInput.type = 'text';
+                    renameInput.className = 'fav-tag-rename-input';
+                    renameInput.value = tag;
+                    renameInput.style.cssText = 'position:absolute;inset:0;border:1px solid var(--primary);border-radius:4px;padding:0 6px;font-size:11px;background:var(--card);z-index:1;';
+                    opt.style.position = 'relative';
+                    opt.textContent = '';
+                    opt.appendChild(renameInput);
+                    renameInput.focus();
+                    renameInput.select();
+                    const doRename = () => {
+                        const newName = renameInput.value.trim();
+                        opt.textContent = `#${tag}`;
+                        if (newName && newName !== tag) {
+                            renameCustomTag(tag, newName);
+                            const s = document.getElementById('favSearchInput')?.value || '';
+                            renderFavoritesList(s);
+                            // 更新 popover
+                            allTags.delete(tag);
+                            allTags.add(newName);
+                            sortedTags.length = 0;
+                            sortedTags.push(...[...allTags].sort());
+                            const idx = currentTags.indexOf(tag);
+                            if (idx >= 0) currentTags[idx] = newName;
+                            renderTagOptions(filterInput.value);
+                        } else {
+                            opt.textContent = `#${tag}`;
+                        }
+                    };
+                    renameInput.addEventListener('blur', doRename);
+                    renameInput.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter') { ev.preventDefault(); renameInput.blur(); }
+                        if (ev.key === 'Escape') { opt.textContent = `#${tag}`; }
+                    });
+                });
+            }
+
+            tagList.appendChild(row);
         });
     }
     renderTagOptions('');

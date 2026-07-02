@@ -81,7 +81,7 @@ export const FOFA_RULES = [
 
     // ====== 有趣发现 ======
     { name: 'Google 反代', query: `body="var c = Array.prototype.slice.call(arguments, 1);return function() {var d=c.slice();"`, description: 'Google 搜索反向代理服务器', tags: ['google', 'fun'] },
-    { name: 'Python SimpleHTTP', query: `server="SimpleHTTP/0.6 Python/3.6" || server="SimpleHTTP/0.6 Python/3.7" || server="SimpleHTTP/0.6 Python/3.8" || server="SimpleHTTP/0.6 Python/3.9" && title="Directory listing for"`, description: 'Python SimpleHTTP 临时服务器', tags: ['python', 'fun'] },
+    { name: 'Python SimpleHTTP', query: `server="SimpleHTTP" && title="Directory listing "`, description: 'Python SimpleHTTP 临时服务器', tags: ['python', 'fun'] },
     { name: '社工库', query: `title="社工库" || ((title="社工库" && title="系统") || (title="社工库查询" ))`, description: '社工库查询系统', tags: ['fun'] },
     { name: 'HFS 命令执行', query: `body="HttpFileServer v2.3 beta 287"`, description: '存在命令执行的 HFS 服务', tags: ['hfs', 'fun'] },
     { name: '卫星 FTP', query: `banner="Cobham SATCOM"`, description: 'Cobham 卫星通信 FTP', tags: ['satellite', 'fun'] },
