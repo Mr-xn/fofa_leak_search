@@ -287,6 +287,11 @@ function _getBuiltinTags() {
     return _builtinTags;
 }
 
+// 预构建 SVG 图标字符串，避免每条收藏重复创建（WebKit2GTK 性能优化）
+const _SVG_CHECK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+const _SVG_EDIT = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+const _SVG_DELETE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
 /**
  * 从收藏列表中聚合所有标签，按出现频次降序排序。
  * 优先展示 "用户" 标签和用户自定义标签，内置标签按频次补位。
@@ -359,10 +364,9 @@ function _renderChips(tags) {
  * @param {number} index - 渲染索引
  * @returns {string}
  */
-function _renderUserTags(fav, index) {
+function _renderUserTags(fav, index, builtin) {
     const tags = Array.isArray(fav.tags) ? fav.tags : ['用户'];
     if (tags.length === 0) return '';
-    const builtin = _getBuiltinTags();
     const chips = tags.map(t => {
         const canQuickRemove = t !== '用户' && !builtin.has(t);
         return `<span class="fav-tag-chip${canQuickRemove ? ' fav-tag-chip-removable' : ''}" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}${canQuickRemove ? `<button class="fav-tag-chip-remove" data-tag-index="${index}" data-tag="${escapeHtml(t)}" title="从当前规则移除此标签">×</button>` : ''}</span>`;
@@ -412,6 +416,9 @@ export function renderFavoritesList(filterText) {
     listEl.style.display = '';
     emptyEl.style.display = 'none';
 
+    // 预计算内置标签集合，避免每条收藏重复计算（WebKit2GTK 性能优化）
+    const builtin = _getBuiltinTags();
+
     listEl.innerHTML = favorites.map((f, i) => {
         // 仅前 12 项应用 staggered 渐入，避免长列表动画开销
         const delay = i < 12 ? ` style="animation-delay:${(i * 24).toFixed(0)}ms"` : '';
@@ -430,11 +437,7 @@ export function renderFavoritesList(filterText) {
                     ${sysTags}
                 </div>
                 <div class="fav-item-actions">
-                    <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                    </button>
+                    <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">${_SVG_CHECK}</button>
                 </div>
             </div>`;
         }
@@ -443,28 +446,15 @@ export function renderFavoritesList(filterText) {
             <div class="fav-item-main">
                 <div class="fav-name-row">
                     <span class="fav-name" data-name-index="${i}" title="点击编辑别名">${escapeHtml(f.name || f.baseQuery)}</span>
-                    <button class="fav-edit-btn" data-edit-index="${i}" title="编辑别名">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                    </button>
+                    <button class="fav-edit-btn" data-edit-index="${i}" title="编辑别名">${_SVG_EDIT}</button>
                 </div>
                 <span class="fav-query" title="${escapeHtml(f.query)}">${escapeHtml(f.query)}</span>
-                ${_renderUserTags(f, i)}
+                ${_renderUserTags(f, i, builtin)}
                 <span class="fav-time">${formatTime(f.time)}</span>
             </div>
             <div class="fav-item-actions">
-                <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                </button>
-                <button class="btn btn-sm fav-delete" data-index="${i}" title="删除收藏">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
+                <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">${_SVG_CHECK}</button>
+                <button class="btn btn-sm fav-delete" data-index="${i}" title="删除收藏">${_SVG_DELETE}</button>
             </div>
         </div>`;
     }).join('');
