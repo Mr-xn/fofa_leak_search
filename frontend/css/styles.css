@@ -12,7 +12,7 @@
     --card: #ffffff;
     --text: #0f172a;
     --text-secondary: #64748b;
-    --text-muted: #94a3b8;
+    --text-muted: #64748b;
     --border: #e2e8f0;
     --border-light: #f1f5f9;
     --success: #10b981;
@@ -23,11 +23,14 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', 'Ubuntu', 'Cantarell', sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.5;
     font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 /* ==================== 顶部栏 ==================== */
@@ -2150,7 +2153,7 @@ tr:last-child td {
 }
 
 .settings-toggle-desc {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     display: block;
     margin-top: 2px;
