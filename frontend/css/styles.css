@@ -2160,6 +2160,12 @@ tr:last-child td {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+    transition: opacity 0.2s;
+}
+
+.settings-proxy-grid.proxy-disabled {
+    opacity: 0.45;
+    pointer-events: none;
 }
 
 .settings-field {
