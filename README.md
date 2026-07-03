@@ -8,6 +8,17 @@ FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2]
 
 ## 最近更新
 
+### v1.2.1
+- 新增 **诊断日志系统**：设置面板支持启用/关闭、等级筛选（error/warn/info/debug），日志查看器支持刷新、导出 JSON、清空，非 debug 等级自动脱敏敏感字段
+- 新增 **代理启用/禁用开关**：一键启用或禁用代理，状态持久化，关闭时自动切换为直连模式
+- 优化 **收藏查询面板**：支持内联编辑别名、自定义标签增删改、标签行折叠/展开
+- 修复 `isIPv6()` 误判 HTTP URL 导致 link 列被截断的 bug
+- 修复 Rust 代理层转发查询参数时未 URL 编码的问题
+- 修复 WebKit2GTK 收藏面板 CPU 飙升（移除 `backdrop-filter` 等高耗能 CSS）
+- 跨平台 WebView 性能优化（列宽拖动节流、`transition` 精简、动画限制）
+- Linux 设置弹窗文字清晰度修复（字体栈补充、对比度提升至 WCAG AA）
+- 修复代理禁用后重启仍走代理的 bug
+
 ### v1.2.0
 - 新增 **FOFA 规则库**，首次启动自动注入内置查询模板并支持一键填充
 - 新增 **Icon Hash 计算器**，支持 URL favicon 与本地文件两种计算方式
@@ -55,10 +66,17 @@ FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2]
 ### 配置管理
 - 统一设置中心：API 配置、配置管理、导出设置、代理设置、请求设置
 - 配置导入/导出（API Key、历史、字段、缓存设置、代理、UA、自定义 Headers）
-- 支持 HTTP/HTTPS/SOCKS5 代理
+- 支持 HTTP/HTTPS/SOCKS5 代理，带**启用/禁用开关**，关闭时自动切换为直连模式，状态跨重启持久化
 - 支持自定义 User-Agent 与 HTTP Headers
 - IndexedDB 缓存，可配置有效期
 - 查询语句规范化，避免缓存未命中
+
+### 诊断日志
+- 设置面板「诊断日志」分区，支持启用/关闭与等级筛选（error / warn / info / debug）
+- 日志查看器实时渲染最近 100 条日志，按等级颜色区分
+- 支持刷新日志、导出 JSON 文件、清空日志
+- 非 debug 等级自动脱敏密码/token/key 字段和 URL 参数
+- 覆盖核心模块：API 请求、搜索结果、缓存读写、更新检测、代理配置、下载任务、Icon Hash、智能下载
 
 ### 辅助工具
 - **Icon Hash 计算器**：兼容 FOFA icon_hash 算法，可复制结果或直接带入筛选
@@ -137,10 +155,20 @@ fofa_leak_search/
 │   ├── css/
 │   │   └── styles.css          # 样式表
 │   └── js/                     # ES Module 模块
+│       ├── api.js              # FOFA API 请求封装
+│       ├── config.js           # 全局常量与版本号
 │       ├── favorites.js        # 收藏查询
 │       ├── fofa-rules.js       # FOFA 规则库
 │       ├── icon-hash.js        # Icon Hash 计算器
+│       ├── logger.js           # 诊断日志系统
+│       ├── query-normalizer.js # 查询语句规范化
+│       ├── results.js          # 搜索结果渲染
+│       ├── search.js           # 搜索逻辑
 │       ├── smart-downloader.js # 智能分片下载
+│       ├── stats.js            # 账户统计
+│       ├── storage.js          # localStorage / IndexedDB 封装
+│       ├── tauri-bridge.js     # Tauri 命令桥接
+│       ├── ui.js               # 通用 UI 组件与交互
 │       ├── updater.js          # 在线更新检测
 │       ├── user-info.js        # 账户信息
 │       └── main.js             # 主入口
