@@ -1923,8 +1923,8 @@ tr:last-child td {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.48);
+    /* 移除 backdrop-filter: blur() — WebKit2GTK (Linux) 上会导致持续 95%+ CPU 占用 */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -2541,7 +2541,8 @@ tr:last-child td {
         max-height: 88vh;
         overflow: hidden;
         border-radius: 16px;
-        box-shadow: 0 24px 64px -20px rgba(15, 23, 42, 0.35);
+        /* 降低阴影模糊半径，减少 WebKit2GTK GPU 合成开销 */
+        box-shadow: 0 8px 32px rgba(15, 23, 42, 0.25);
     }
     .fav-modal * {
         box-sizing: border-box;
@@ -2768,15 +2769,14 @@ tr:last-child td {
         border-radius: 2px;
         background: var(--primary);
         opacity: 0;
-        transform: scaleY(0.4);
-        transition: opacity 0.18s, transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+        /* 移除 transform: scaleY() — WebKit2GTK 上每个伪元素创建独立合成层导致 CPU 飙升 */
+        transition: opacity 0.18s;
     }
     .fav-item:hover {
         background: var(--primary-light);
     }
     .fav-item:hover::before {
         opacity: 1;
-        transform: scaleY(1);
     }
     @keyframes favItemIn {
         from { opacity: 0; transform: translateY(6px); }
