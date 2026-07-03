@@ -253,6 +253,37 @@ export async function saveProxySettings() {
 }
 
 /**
+ * 启动时恢复代理配置到 Rust 侧
+ * 读取 localStorage 中的 proxyEnabled 标志，只在启用时才恢复代理
+ * @returns {Promise<{restored: boolean, host?: string, port?: number, reason?: string}>}
+ */
+export async function restoreProxyOnStartup() {
+    const savedHost = localStorage.getItem(STORAGE_KEYS.proxyHost) || '';
+    const savedPort = parseInt(localStorage.getItem(STORAGE_KEYS.proxyPort)) || 0;
+
+    // 无配置：host 或 port 缺失
+    if (!savedHost || !savedPort) {
+        return { restored: false, reason: 'no-config' };
+    }
+
+    // 检查代理开关状态（无键时默认启用，向后兼容旧版本）
+    const enabledRaw = localStorage.getItem(STORAGE_KEYS.proxyEnabled);
+    const proxyEnabled = enabledRaw !== 'false';
+
+    if (!proxyEnabled) {
+        return { restored: false, reason: 'disabled' };
+    }
+
+    const savedUser = localStorage.getItem(STORAGE_KEYS.proxyUsername) || '';
+    const savedPass = localStorage.getItem(STORAGE_KEYS.proxyPassword) || '';
+
+    await setProxyConfig(savedHost, savedPort, savedUser, savedPass);
+    logInfo('proxy', '启动时恢复代理配置成功', { host: savedHost, port: savedPort, usernamePresent: !!savedUser, passwordPresent: !!savedPass });
+
+    return { restored: true, host: savedHost, port: savedPort };
+}
+
+/**
  * 代理开关联动：启用/禁用输入框和保存按钮文字
  * @param {boolean} enabled - 是否启用代理
  */

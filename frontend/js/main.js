@@ -10,7 +10,7 @@ import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey
          initQuickFilters, toggleFilters, toggleFilter, updateFilterOperator, updateFilterInput, removeFilter, clearAllFilters, getFilterQuery,
          restoreFiltersFromData,
          exportConfigToFile, importConfigFromFile, toggleAdvanced, setSearchButtonUpdater,
-         showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings, toggleProxyEnabled,
+         showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings, toggleProxyEnabled, restoreProxyOnStartup,
          resetUserAgent, saveRequestConfig, renderLogViewer, clearDiagnosticLogs, exportDiagnosticLogs } from './ui.js';
 import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchResults, updateSearchButtonState } from './search.js';
 import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults } from './results.js';
@@ -836,19 +836,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         state.apiBaseUrl = await initTauriBridge();
 
-        // 恢复上次保存的代理配置到 Rust 侧（解决重启后代理不生效的问题）
+        // 恢复上次保存的代理配置到 Rust 侧（仅在代理启用时恢复）
         if (isTauri()) {
-            const { setProxyConfig, setRequestConfig } = await import('./tauri-bridge.js');
-            const savedHost = localStorage.getItem(STORAGE_KEYS.proxyHost) || '';
-            const savedPort = parseInt(localStorage.getItem(STORAGE_KEYS.proxyPort)) || 0;
-            const savedUser = localStorage.getItem(STORAGE_KEYS.proxyUsername) || '';
-            const savedPass = localStorage.getItem(STORAGE_KEYS.proxyPassword) || '';
-            if (savedHost && savedPort) {
-                try {
-                    await setProxyConfig(savedHost, savedPort, savedUser, savedPass);
-                    console.log('[Init] Proxy config restored:', savedHost, savedPort);
-                    logInfo('proxy', '启动时恢复代理配置成功', { host: savedHost, port: savedPort, usernamePresent: !!savedUser, passwordPresent: !!savedPass });
-                } catch (e) { console.warn('[Init] Failed to restore proxy config:', e); logWarn('proxy', '启动时恢复代理配置失败', { message: e.message || String(e) }); }
+            const { setRequestConfig } = await import('./tauri-bridge.js');
+            try {
+                const proxyResult = await restoreProxyOnStartup();
+                if (proxyResult.restored) {
+                    console.log('[Init] Proxy config restored:', proxyResult.host, proxyResult.port);
+                } else {
+                    console.log('[Init] Proxy not restored:', proxyResult.reason);
+                }
+            } catch (e) { console.warn('[Init] Failed to restore proxy config:', e); logWarn('proxy', '启动时恢复代理配置失败', { message: e.message || String(e) }); }
             }
 
             // 恢复请求配置（User-Agent + 自定义 Headers）
