@@ -415,8 +415,18 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                         <span>代理设置</span>
                     </div>
+                    <div class="settings-toggle-row">
+                        <div>
+                            <span class="settings-toggle-label">启用代理</span>
+                            <span class="settings-toggle-desc">开启后通过代理服务器访问 FOFA API，关闭则直连</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="proxyEnabled" onchange="handleProxyToggle(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                     <p class="settings-section-desc">配置 HTTP/HTTPS/SOCKS5 代理</p>
-                    <div class="settings-proxy-grid">
+                    <div class="settings-proxy-grid" id="proxyFieldsGrid">
                         <div class="settings-field">
                             <label>主机地址</label>
                             <input type="text" class="settings-input" id="proxyHost" placeholder="127.0.0.1">
@@ -434,7 +444,7 @@
                             <input type="password" class="settings-input" id="proxyPassword" placeholder="可选">
                         </div>
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="saveProxySettings()" style="margin-top: 10px;">保存代理设置</button>
+                    <button class="btn btn-primary btn-sm" id="saveProxyBtn" onclick="saveProxySettings()" style="margin-top: 10px;">保存代理设置</button>
                 </div>
 
                 <!-- 请求设置 -->
