@@ -78,6 +78,10 @@ export function showSettingsModal() {
     const exportQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery);
     document.getElementById('exportIncludeQuery').checked = exportQuery === 'true';
     // 加载代理设置（优先从 localStorage，异步同步 Rust 侧）
+    const proxyEnabled = localStorage.getItem(STORAGE_KEYS.proxyEnabled) !== 'false';
+    const proxyEnabledCheckbox = document.getElementById('proxyEnabled');
+    if (proxyEnabledCheckbox) proxyEnabledCheckbox.checked = proxyEnabled;
+    toggleProxyEnabled(proxyEnabled);
     document.getElementById('proxyHost').value = localStorage.getItem(STORAGE_KEYS.proxyHost) || '';
     document.getElementById('proxyPort').value = localStorage.getItem(STORAGE_KEYS.proxyPort) || '';
     document.getElementById('proxyUsername').value = localStorage.getItem(STORAGE_KEYS.proxyUsername) || '';
@@ -200,16 +204,20 @@ export function toggleSettingsPassword() {
 }
 
 export async function saveProxySettings() {
+    const enabledCheckbox = document.getElementById('proxyEnabled');
+    const enabled = enabledCheckbox ? enabledCheckbox.checked : true;
     const host = document.getElementById('proxyHost').value.trim();
     const port = parseInt(document.getElementById('proxyPort').value.trim()) || 0;
     const username = document.getElementById('proxyUsername').value.trim();
     const password = document.getElementById('proxyPassword').value.trim();
 
+    localStorage.setItem(STORAGE_KEYS.proxyEnabled, enabled.toString());
     localStorage.setItem(STORAGE_KEYS.proxyHost, host);
     localStorage.setItem(STORAGE_KEYS.proxyPort, port.toString());
     localStorage.setItem(STORAGE_KEYS.proxyUsername, username);
     localStorage.setItem(STORAGE_KEYS.proxyPassword, password);
     logInfo('proxy', '保存代理设置', {
+        enabled,
         host,
         port,
         usernamePresent: !!username,
@@ -217,21 +225,57 @@ export async function saveProxySettings() {
     });
 
     // 同步到 Rust 侧（Tauri 环境）
+    // 开关关闭时发送空配置以清除 Rust 侧代理
     try {
-        const result = await setProxyConfig(host, port, username, password);
-        console.log('[Proxy]', result);
-        logInfo('proxy', '代理设置已同步到 Rust', { result });
+        if (enabled) {
+            const result = await setProxyConfig(host, port, username, password);
+            console.log('[Proxy]', result);
+            logInfo('proxy', '代理设置已同步到 Rust', { result });
+        } else {
+            const result = await setProxyConfig('', 0, '', '');
+            console.log('[Proxy] 已禁用代理', result);
+            logInfo('proxy', '代理已禁用，已清除 Rust 侧配置', { result });
+        }
     } catch (e) {
         console.warn('[Proxy] 同步到 Rust 侧失败（非 Tauri 环境可忽略）:', e);
         logWarn('proxy', '代理设置同步到 Rust 失败', { message: e.message || String(e) });
     }
 
-    if (host && port) {
+    if (!enabled) {
+        showToast('代理已禁用', 'success');
+    } else if (host && port) {
         showToast(`代理设置已保存: ${host}:${port}`, 'success');
     } else if (!host && !port) {
         showToast('代理设置已清除', 'success');
     } else {
         showToast('代理设置已保存（主机和端口需同时填写才生效）', 'info');
+    }
+}
+
+/**
+ * 代理开关联动：启用/禁用输入框和保存按钮文字
+ * @param {boolean} enabled - 是否启用代理
+ */
+export function toggleProxyEnabled(enabled) {
+    const grid = document.getElementById('proxyFieldsGrid');
+    const fields = ['proxyHost', 'proxyPort', 'proxyUsername', 'proxyPassword'];
+    const btn = document.getElementById('saveProxyBtn');
+
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !enabled;
+    });
+
+    if (grid) {
+        if (enabled) {
+            grid.classList.remove('proxy-disabled');
+        } else {
+            grid.classList.add('proxy-disabled');
+        }
+    }
+
+    if (btn) {
+        btn.textContent = enabled ? '保存代理设置' : '保存并禁用代理';
     }
 }
 
@@ -352,6 +396,7 @@ function getConfigObject() {
             dataRange: localStorage.getItem(STORAGE_KEYS.dataRange) || 'default',
             activeFilters: localStorage.getItem(STORAGE_KEYS.activeFilters) || '{}',
             exportIncludeQuery: localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) || 'true',
+            proxyEnabled: localStorage.getItem(STORAGE_KEYS.proxyEnabled) || 'true',
             proxyHost: localStorage.getItem(STORAGE_KEYS.proxyHost) || '',
             proxyPort: localStorage.getItem(STORAGE_KEYS.proxyPort) || '',
             proxyUsername: localStorage.getItem(STORAGE_KEYS.proxyUsername) || '',
@@ -443,6 +488,11 @@ function applyConfig(config, source) {
     if (data.activeFilters) localStorage.setItem(STORAGE_KEYS.activeFilters, data.activeFilters);
     if (data.loggingEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.loggingEnabled, data.loggingEnabled);
     if (data.loggingLevel) localStorage.setItem(STORAGE_KEYS.loggingLevel, data.loggingLevel);
+    if (data.proxyEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.proxyEnabled, data.proxyEnabled);
+    if (data.proxyHost !== undefined) localStorage.setItem(STORAGE_KEYS.proxyHost, data.proxyHost);
+    if (data.proxyPort !== undefined) localStorage.setItem(STORAGE_KEYS.proxyPort, data.proxyPort);
+    if (data.proxyUsername !== undefined) localStorage.setItem(STORAGE_KEYS.proxyUsername, data.proxyUsername);
+    if (data.proxyPassword !== undefined) localStorage.setItem(STORAGE_KEYS.proxyPassword, data.proxyPassword);
 
     // 兼容新旧配置：v2 使用 dataRange，v1 使用 timeRange + resultMode
     if (data.dataRange) {

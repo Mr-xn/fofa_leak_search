@@ -10,7 +10,7 @@ import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey
          initQuickFilters, toggleFilters, toggleFilter, updateFilterOperator, updateFilterInput, removeFilter, clearAllFilters, getFilterQuery,
          restoreFiltersFromData,
          exportConfigToFile, importConfigFromFile, toggleAdvanced, setSearchButtonUpdater,
-         showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings,
+         showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings, toggleProxyEnabled,
          resetUserAgent, saveRequestConfig, renderLogViewer, clearDiagnosticLogs, exportDiagnosticLogs } from './ui.js';
 import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchResults, updateSearchButtonState } from './search.js';
 import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults } from './results.js';
@@ -58,6 +58,7 @@ window.closeSettingsModal = closeSettingsModal;
 window.saveSettingsApiKey = saveSettingsApiKey;
 window.toggleSettingsPassword = toggleSettingsPassword;
 window.saveProxySettings = saveProxySettings;
+window.handleProxyToggle = (checked) => toggleProxyEnabled(checked);
 window.resetUserAgent = resetUserAgent;
 window.saveRequestConfig = saveRequestConfig;
 window.downloadCurrentPage = downloadCurrentPage;
