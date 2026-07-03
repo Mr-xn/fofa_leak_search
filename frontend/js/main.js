@@ -1005,29 +1005,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tableWrapper = document.getElementById('tableWrapper');
     const scrollShadow = document.getElementById('tableScrollShadow');
     if (tableContainer && scrollShadow) {
+        let tableScrollWidth = 0;
+        let tableClientWidth = 0;
+        let scrollShadowFrame = null;
+
+        const refreshScrollShadowMetrics = () => {
+            tableScrollWidth = tableContainer.scrollWidth;
+            tableClientWidth = tableContainer.clientWidth;
+        };
+
         const updateScrollShadow = () => {
             // 仅在表格可见时检测
             if (tableWrapper && tableWrapper.style.display === 'none') {
                 scrollShadow.classList.remove('visible');
                 return;
             }
-            // 检测是否有横向溢出且未滚动到最右侧
-            const hasOverflow = tableContainer.scrollWidth > tableContainer.clientWidth + 1;
-            const isAtEnd = tableContainer.scrollLeft + tableContainer.clientWidth >= tableContainer.scrollWidth - 4;
+            // scroll 期间只读 scrollLeft，宽度指标由内容变化/窗口变化时刷新，避免强制同步布局
+            const hasOverflow = tableScrollWidth > tableClientWidth + 1;
+            const isAtEnd = tableContainer.scrollLeft + tableClientWidth >= tableScrollWidth - 4;
             if (hasOverflow && !isAtEnd) {
                 scrollShadow.classList.add('visible');
             } else {
                 scrollShadow.classList.remove('visible');
             }
         };
-        tableContainer.addEventListener('scroll', updateScrollShadow, { passive: true });
+
+        const scheduleScrollShadowUpdate = () => {
+            if (scrollShadowFrame !== null) return;
+            scrollShadowFrame = requestAnimationFrame(() => {
+                scrollShadowFrame = null;
+                updateScrollShadow();
+            });
+        };
+
+        const refreshAndScheduleScrollShadowUpdate = () => {
+            refreshScrollShadowMetrics();
+            scheduleScrollShadowUpdate();
+        };
+
+        refreshAndScheduleScrollShadowUpdate();
+        tableContainer.addEventListener('scroll', scheduleScrollShadowUpdate, { passive: true });
         // 使用 MutationObserver 监听表格内容变化
         const observer = new MutationObserver(() => {
-            setTimeout(updateScrollShadow, 150);
+            setTimeout(refreshAndScheduleScrollShadowUpdate, 150);
         });
         observer.observe(tableContainer, { childList: true, subtree: true, characterData: true });
         // 窗口大小变化时重新检测
-        window.addEventListener('resize', updateScrollShadow, { passive: true });
+        window.addEventListener('resize', refreshAndScheduleScrollShadowUpdate, { passive: true });
     }
 
     // 点击外部关闭建议

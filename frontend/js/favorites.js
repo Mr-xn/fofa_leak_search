@@ -420,14 +420,15 @@ export function renderFavoritesList(filterText) {
     const builtin = _getBuiltinTags();
 
     listEl.innerHTML = favorites.map((f, i) => {
-        // 仅前 12 项应用 staggered 渐入，避免长列表动画开销
+        // 仅前 12 项应用 staggered 渐入，后续项禁用动画，避免长列表合成层开销
         const delay = i < 12 ? ` style="animation-delay:${(i * 24).toFixed(0)}ms"` : '';
+        const animClass = i < 12 ? '' : ' fav-item-no-anim';
         if (f.system) {
             const sysTags = Array.isArray(f.tags) && f.tags.length
                 ? `<div class="fav-sys-tags">${f.tags.slice(0, 4).map(t => `<span class="fav-tag-ro">#${escapeHtml(t)}</span>`).join('')}</div>`
                 : '';
             return `
-            <div class="fav-item fav-system" data-index="${i}"${delay}>
+            <div class="fav-item fav-system${animClass}" data-index="${i}"${delay}>
                 <div class="fav-item-main">
                     <div class="fav-sys-head">
                         <span class="fav-sys-name">${escapeHtml(f.name || '未命名规则')}</span>
@@ -442,7 +443,7 @@ export function renderFavoritesList(filterText) {
             </div>`;
         }
         return `
-        <div class="fav-item" data-index="${i}"${delay}>
+        <div class="fav-item${animClass}" data-index="${i}"${delay}>
             <div class="fav-item-main">
                 <div class="fav-name-row">
                     <span class="fav-name" data-name-index="${i}" title="点击编辑别名">${escapeHtml(f.name || f.baseQuery)}</span>
