@@ -847,7 +847,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log('[Init] Proxy not restored:', proxyResult.reason);
                 }
             } catch (e) { console.warn('[Init] Failed to restore proxy config:', e); logWarn('proxy', '启动时恢复代理配置失败', { message: e.message || String(e) }); }
-            }
 
             // 恢复请求配置（User-Agent + 自定义 Headers）
             const savedUA = localStorage.getItem(STORAGE_KEYS.userAgent) || '';
