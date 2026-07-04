@@ -4,7 +4,11 @@ import { state } from './config.js';
 import { debug as logDebug, info as logInfo, error as logError } from './logger.js';
 
 // ==================== 通用 fetch 包装（带超时） ====================
-async function fetchWithTimeout(url, timeoutMs = 30000) {
+async function fetchWithTimeout(url, timeoutMs) {
+    if (timeoutMs === undefined) {
+        const saved = parseInt(localStorage.getItem('fofa_request_timeout'));
+        timeoutMs = (saved >= 5 && saved <= 300) ? saved * 1000 : 30000;
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const started = Date.now();
@@ -39,7 +43,7 @@ export async function fetchAccountInfo() {
 }
 
 // ==================== 搜索资产 ====================
-export async function fetchSearchResults(query, page, size, fields, full = false, timeoutMs = 30000) {
+export async function fetchSearchResults(query, page, size, fields, full = false, timeoutMs) {
     const qbase64 = btoa(unescape(encodeURIComponent(query)));
     let url = `${state.apiBaseUrl}/api/search/all?key=${state.apiKey}&qbase64=${qbase64}&page=${page}&size=${size}&fields=${fields}`;
     if (full) {

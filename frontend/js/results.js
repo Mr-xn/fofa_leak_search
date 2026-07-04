@@ -6,6 +6,7 @@ import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls } from './storage.js';
 import { info as logInfo, warn as logWarn, error as logError, debug as logDebug } from './logger.js';
+import { openUrl } from './tauri-bridge.js';
 
 // 延迟注入：打破 search.js ↔ results.js 循环依赖
 let _fetchResults = null;
@@ -409,6 +410,44 @@ function restoreDownloadRange() {
 }
 
 // ==================== 下载功能 ====================
+
+// 批量打开当前页所有链接
+export function openAllLinks() {
+    if (!state.results || state.results.length === 0) {
+        showToast('没有可打开的链接', 'error');
+        return;
+    }
+
+    const fields = getSelectedFields().split(',');
+    const linkIndex = fields.indexOf('link');
+
+    if (linkIndex === -1) {
+        showToast('当前未选择「链接」字段', 'error');
+        return;
+    }
+
+    const urls = state.results
+        .map(row => row[linkIndex])
+        .filter(url => url && typeof url === 'string' && /^https?:\/\//i.test(url.trim()));
+
+    if (urls.length === 0) {
+        showToast('当前页无有效链接', 'info');
+        return;
+    }
+
+    if (urls.length > 20) {
+        if (!confirm(`将一次性打开 ${urls.length} 个链接，可能导致浏览器卡顿。\n建议减少每页条数后分批打开。\n\n是否继续？`)) {
+            showToast('已取消打开', 'info');
+            return;
+        }
+    }
+
+    urls.forEach((url, i) => {
+        setTimeout(() => openUrl(url.trim()), i * 300);
+    });
+
+    showToast(`已开始打开 ${urls.length} 个链接`, 'success');
+}
 
 // 下载当前页数据
 export function downloadCurrentPage() {

@@ -97,6 +97,10 @@ export function showSettingsModal() {
     } catch { /* ignore parse error */ }
     document.getElementById('headerErrors').style.display = 'none';
 
+    // 加载请求超时
+    const savedTimeout = localStorage.getItem(STORAGE_KEYS.requestTimeout);
+    document.getElementById('requestTimeout').value = savedTimeout || '30';
+
     // 异步从 Rust 侧获取最新代理配置
     getTauriProxyConfig().then(config => {
         if (config) {
@@ -399,6 +403,13 @@ export async function saveRequestConfig() {
     localStorage.setItem(STORAGE_KEYS.userAgent, userAgent);
     localStorage.setItem(STORAGE_KEYS.customHeaders, JSON.stringify(headers));
 
+    // 保存超时设置（秒，范围 5–300）
+    const timeoutInput = document.getElementById('requestTimeout');
+    const timeoutVal = parseInt(timeoutInput.value) || 30;
+    const clampedTimeout = Math.max(5, Math.min(300, timeoutVal));
+    localStorage.setItem(STORAGE_KEYS.requestTimeout, clampedTimeout.toString());
+    timeoutInput.value = clampedTimeout;  // 回写修正后的值
+
     // 同步到 Rust 侧
     try {
         const result = await setRequestConfig(userAgent, headers);
@@ -411,8 +422,8 @@ export async function saveRequestConfig() {
 }
 
 // ==================== 配置导入导出 ====================
-// 获取当前配置对象
-function getConfigObject() {
+// 获取当前配置对象（已导出供测试）
+export function getConfigObject() {
     return {
         version: 2,
         exportTime: new Date().toISOString(),
@@ -436,7 +447,8 @@ function getConfigObject() {
             customHeaders: localStorage.getItem(STORAGE_KEYS.customHeaders) || '{}',
             favorites: localStorage.getItem(STORAGE_KEYS.favorites) || '[]',
             loggingEnabled: localStorage.getItem(STORAGE_KEYS.loggingEnabled) || 'false',
-            loggingLevel: localStorage.getItem(STORAGE_KEYS.loggingLevel) || 'info'
+            loggingLevel: localStorage.getItem(STORAGE_KEYS.loggingLevel) || 'info',
+            requestTimeout: localStorage.getItem(STORAGE_KEYS.requestTimeout) || '30'
         }
     };
 }
@@ -499,8 +511,8 @@ export function importConfigFromFile() {
     input.click();
 }
 
-// 应用配置到 localStorage
-function applyConfig(config, source) {
+// 应用配置到 localStorage（已导出供测试）
+export function applyConfig(config, source) {
     if (!config.version || !config.data) {
         showToast('无效的配置数据', 'error');
         return;
@@ -519,6 +531,7 @@ function applyConfig(config, source) {
     if (data.activeFilters) localStorage.setItem(STORAGE_KEYS.activeFilters, data.activeFilters);
     if (data.loggingEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.loggingEnabled, data.loggingEnabled);
     if (data.loggingLevel) localStorage.setItem(STORAGE_KEYS.loggingLevel, data.loggingLevel);
+    if (data.requestTimeout) localStorage.setItem(STORAGE_KEYS.requestTimeout, data.requestTimeout);
     if (data.proxyEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.proxyEnabled, data.proxyEnabled);
     if (data.proxyHost !== undefined) localStorage.setItem(STORAGE_KEYS.proxyHost, data.proxyHost);
     if (data.proxyPort !== undefined) localStorage.setItem(STORAGE_KEYS.proxyPort, data.proxyPort);

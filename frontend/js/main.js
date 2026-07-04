@@ -13,7 +13,7 @@ import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey
          showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings, toggleProxyEnabled, restoreProxyOnStartup,
          resetUserAgent, saveRequestConfig, renderLogViewer, clearDiagnosticLogs, exportDiagnosticLogs } from './ui.js';
 import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchResults, updateSearchButtonState } from './search.js';
-import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults } from './results.js';
+import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults, openAllLinks } from './results.js';
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
 import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
@@ -61,6 +61,7 @@ window.saveProxySettings = saveProxySettings;
 window.handleProxyToggle = (checked) => toggleProxyEnabled(checked);
 window.resetUserAgent = resetUserAgent;
 window.saveRequestConfig = saveRequestConfig;
+window.openAllLinks = openAllLinks;
 window.downloadCurrentPage = downloadCurrentPage;
 window.downloadAllPages = downloadAllPages;
 window.closeDownloadModal = closeDownloadModal;
@@ -211,7 +212,7 @@ window.startSmartDownload = async () => {
     analyzeHtml += `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">`;
     analyzeHtml += `<span><strong>数据量：</strong>${stats.size.toLocaleString()} 条</span>`;
     analyzeHtml += `<span><strong>单次限制：</strong>${freeLimit.toLocaleString()} 条</span>`;
-    analyzeHtml += `<span><strong>需要拆分：</strong>${maxTotalLimit > freeLimit ? '是 (' + Math.ceil(maxTotalLimit / freeLimit) + ' 次)' : '否'}</span>`;
+    analyzeHtml += `<span><strong>需要拆分：</strong>${maxTotalLimit > freeLimit ? '至少 ' + Math.ceil(maxTotalLimit / freeLimit) + ' 步' : '否'}</span>`;
     analyzeHtml += `</div>`;
 
     // 配额信息

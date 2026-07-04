@@ -58,7 +58,8 @@ export const STORAGE_KEYS = {
     loggingEnabled: 'fofa_logging_enabled', // 诊断日志开关
     loggingLevel: 'fofa_logging_level',   // 诊断日志等级
     logs: 'fofa_logs',                    // 诊断日志内容
-    autoCheckUpdate: 'fofa_auto_check_update'  // 启动时自动检测更新
+    autoCheckUpdate: 'fofa_auto_check_update',  // 启动时自动检测更新
+    requestTimeout: 'fofa_request_timeout'  // FOFA 查询超时（秒）
 };
 
 // ==================== 默认选中字段 ====================
