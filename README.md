@@ -1,6 +1,6 @@
 # FOFA Leak Search
 
-![](https://image.mrxn.net/a391f1b2aa6f42f7a8b1bd11e3835046.webp)
+![](https://image.mrxn.net/52b9a53316fd43e2a6a9d4ec8f3c130b.webp)
 
 FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2](https://tauri.app/) 构建。
 
