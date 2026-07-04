@@ -120,9 +120,7 @@ export async function checkForUpdates(silent = false) {
     });
 
     if (hasUpdate) {
-        if (!silent) {
-            showUpdateBanner(release.version, release.url);
-        }
+        showUpdateBanner(release.version, release.url);
         return {
             hasUpdate: true,
             latestVersion: release.version,
@@ -146,7 +144,7 @@ export async function manualCheckUpdate() {
 }
 
 /**
- * 启动时自动检查更新（静默模式：无更新时不提示）
+ * 启动时自动检查更新（静默模式：无更新时不提示，有更新时显示横幅）
  */
 export async function autoCheckUpdate() {
     if (!state.autoCheckUpdate) return;
