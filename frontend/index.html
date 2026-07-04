@@ -240,6 +240,7 @@
                     <div class="inline-pagination" id="inlinePagination" style="display: none;"></div>
                 </div>
                 <div class="results-info-right" id="downloadButtons" style="display: none;">
+                    <button class="btn btn-sm" onclick="openAllLinks()" title="在默认浏览器中打开当前页所有链接">🔗 全部打开</button>
                     <button class="btn btn-sm" onclick="downloadCurrentPage()" title="下载当前页">当前页</button>
                     <button class="btn btn-primary btn-sm" onclick="downloadAllPages()" title="下载全部">下载全部</button>
                     <button class="btn btn-sm" id="smartDownloadBtn" onclick="openSmartDownload()" title="智能分片下载：自动拆分大查询，规避F点消耗" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border-color: transparent;">🧠 智能下载</button>
@@ -454,6 +455,15 @@
                         <span>请求设置</span>
                     </div>
                     <p class="settings-section-desc">自定义 HTTP 请求头，发送给 FOFA API</p>
+
+                    <!-- FOFA 查询超时 -->
+                    <div class="settings-field" style="margin-bottom: 12px;">
+                        <label>FOFA 查询超时（秒）</label>
+                        <p class="settings-toggle-desc">单个 API 请求的最大等待时间，超时后自动中止。默认 30，范围 5–300。</p>
+                        <input type="number" class="settings-input" id="requestTimeout"
+                               min="5" max="300" step="5" placeholder="30"
+                               style="width: 120px; margin-top: 6px;">
+                    </div>
 
                     <!-- User-Agent -->
                     <div class="settings-field" style="margin-bottom: 12px;">
