@@ -1,7 +1,7 @@
 // js/results.js - 结果展示（表格、排序、分页、下载）
 
 import { state, FIELD_LABELS, STORAGE_KEYS } from './config.js';
-import { escapeHtml, formatNumber, showToast } from './utils.js';
+import { escapeHtml, formatNumber, showToast, showConfirm } from './utils.js';
 import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls } from './storage.js';
@@ -412,7 +412,7 @@ function restoreDownloadRange() {
 // ==================== 下载功能 ====================
 
 // 批量打开当前页所有链接
-export function openAllLinks() {
+export async function openAllLinks() {
     if (!state.results || state.results.length === 0) {
         showToast('没有可打开的链接', 'error');
         return;
@@ -436,7 +436,8 @@ export function openAllLinks() {
     }
 
     if (urls.length > 20) {
-        if (!confirm(`将一次性打开 ${urls.length} 个链接，可能导致浏览器卡顿。\n建议减少每页条数后分批打开。\n\n是否继续？`)) {
+        const confirmed = await showConfirm(`将一次性打开 ${urls.length} 个链接，可能导致浏览器卡顿。\n建议减少每页条数后分批打开。\n\n是否继续？`);
+        if (!confirmed) {
             showToast('已取消打开', 'info');
             return;
         }

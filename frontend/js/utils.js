@@ -12,6 +12,32 @@ export function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// ==================== 确认弹窗 ====================
+/**
+ * 显示自定义确认弹窗（替代 window.confirm，跨平台一致）
+ * @param {string} message - 提示消息
+ * @returns {Promise<boolean>} 用户点击"继续"返回 true，"取消"或关闭返回 false
+ */
+export function showConfirm(message) {
+    return new Promise((resolve) => {
+        document.getElementById('confirmMessage').textContent = message;
+        const modal = document.getElementById('confirmModal');
+        modal.style.display = 'flex';
+
+        const cleanup = (result) => {
+            modal.style.display = 'none';
+            resolve(result);
+        };
+
+        document.getElementById('confirmOkBtn').onclick = () => cleanup(true);
+        document.getElementById('confirmCancelBtn').onclick = () => cleanup(false);
+        // 点击遮罩层关闭
+        modal.onclick = (e) => {
+            if (e.target === modal) cleanup(false);
+        };
+    });
+}
+
 // ==================== 数字格式化 ====================
 export function formatNumber(num) {
     if (num >= 10000) {

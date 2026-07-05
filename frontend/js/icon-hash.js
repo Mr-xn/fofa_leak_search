@@ -300,7 +300,20 @@ export async function copyIconHash() {
         await navigator.clipboard.writeText(_lastIconHash);
         showToast('已复制到剪贴板', 'success');
     } catch {
-        showToast('复制失败', 'error');
+        // 降级方案：部分 WebView 环境不支持 clipboard API
+        const textarea = document.createElement('textarea');
+        textarea.value = _lastIconHash;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            showToast('已复制到剪贴板', 'success');
+        } catch {
+            showToast('复制失败', 'error');
+        }
+        document.body.removeChild(textarea);
     }
 }
 
