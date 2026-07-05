@@ -22,10 +22,10 @@ export function showConfirm(message) {
     return new Promise((resolve) => {
         document.getElementById('confirmMessage').textContent = message;
         const modal = document.getElementById('confirmModal');
-        modal.style.display = 'flex';
+        modal.classList.add('show');
 
         const cleanup = (result) => {
-            modal.style.display = 'none';
+            modal.classList.remove('show');
             resolve(result);
         };
 
