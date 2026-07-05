@@ -813,6 +813,17 @@
         </div>
     </div>
 
+    <!-- 确认弹窗（替代 window.confirm，跨平台一致） -->
+    <div class="modal-overlay" id="confirmModal" style="display: none; z-index: 10000;">
+        <div class="modal" style="max-width: 400px; text-align: center; padding: 28px 24px 20px;">
+            <p id="confirmMessage" style="font-size: 14px; line-height: 1.7; margin-bottom: 20px; white-space: pre-wrap;"></p>
+            <div class="modal-actions" style="justify-content: center; gap: 10px;">
+                <button class="btn" id="confirmCancelBtn">取消</button>
+                <button class="btn btn-primary" id="confirmOkBtn">继续</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
