@@ -1,6 +1,6 @@
 {
   "name": "fofa-leak-search",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "FOFA Leak Search - Cross-platform Desktop Application",
   "private": true,
   "scripts": {
