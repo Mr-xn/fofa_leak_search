@@ -521,7 +521,7 @@ function _startInlineNameEdit(idx, entry, editBtn) {
                 e.preventDefault();
                 const newName = input.value.trim();
                 if (newName) {
-                    updateFavoriteName(entry.baseQuery, newName);
+                    updateFavoriteName(entry.query, newName);
                     const searchText = document.getElementById('favSearchInput')?.value || '';
                     renderFavoritesList(searchText);
                     showToast('别名已更新', 'success');
@@ -694,7 +694,7 @@ async function _showTagPopover(anchor, entry, idx) {
         const newTags = hasTag
             ? currentTags.filter(t => t !== tag)
             : [...currentTags, tag];
-        updateFavoriteTags(entry.baseQuery, newTags);
+        updateFavoriteTags(entry.query, newTags);
         const searchText = document.getElementById('favSearchInput')?.value || '';
         renderFavoritesList(searchText);
         // 更新 popover 内状态而非关闭
@@ -708,7 +708,7 @@ async function _showTagPopover(anchor, entry, idx) {
         const name = customInput.value.trim();
         if (!name) return;
         const newTags = [...currentTags, name];
-        updateFavoriteTags(entry.baseQuery, newTags);
+        updateFavoriteTags(entry.query, newTags);
         const searchText = document.getElementById('favSearchInput')?.value || '';
         renderFavoritesList(searchText);
         popover.remove();
@@ -1176,7 +1176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const newName = input ? input.value.trim() : '';
                     const entry = getRenderedFavorite(idx);
                     if (entry && newName) {
-                        updateFavoriteName(entry.baseQuery, newName);
+                        updateFavoriteName(entry.query, newName);
                         const searchText = document.getElementById('favSearchInput')?.value || '';
                         renderFavoritesList(searchText);
                         showToast('别名已更新', 'success');
@@ -1196,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const entry = getRenderedFavorite(idx);
                 if (entry && !entry.system && tag) {
                     const tags = Array.isArray(entry.tags) ? entry.tags : ['用户'];
-                    updateFavoriteTags(entry.baseQuery, tags.filter(t => t !== tag));
+                    updateFavoriteTags(entry.query, tags.filter(t => t !== tag));
                     const searchText = document.getElementById('favSearchInput')?.value || '';
                     renderFavoritesList(searchText);
                     updateFavCount();
@@ -1219,8 +1219,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 e.stopPropagation();
                 const idx = parseInt(deleteBtn.dataset.index, 10);
                 const entry = getRenderedFavorite(idx);
-                if (entry && entry.baseQuery && !entry.system) {
-                    removeFavorite(entry.baseQuery);
+                if (entry && entry.query && !entry.system) {
+                    removeFavorite(entry.query);
                     showToast('已取消收藏', 'info');
                     const searchText = document.getElementById('favSearchInput')?.value || '';
                     renderFavoritesList(searchText);

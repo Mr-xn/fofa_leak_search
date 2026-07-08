@@ -24,11 +24,12 @@ function persistFavorites() {
 export function addFavorite(baseQuery, filtersData, mergedQuery) {
     if (!baseQuery || !baseQuery.trim()) return;
 
-    // 去重前保留旧的 name 和 tags（如果有自定义设置）
-    const existing = state.favorites.find(f => f.baseQuery === baseQuery && !f.system);
+    // 身份键 = 合并后的完整 query（baseQuery + 筛选）。系统规则用 baseQuery==query，
+    // 因此用户组合（带筛选）与系统规则天然不会冲突。
+    const existing = state.favorites.find(f => !f.system && f.query === mergedQuery);
 
-    // 去重：移除相同 baseQuery 的旧条目
-    state.favorites = state.favorites.filter(f => f.baseQuery !== baseQuery);
+    // 去重：仅移除相同完整 query 的【用户】条目，绝不触碰系统规则
+    state.favorites = state.favorites.filter(f => f.system || f.query !== mergedQuery);
 
     // 添加到最前面
     state.favorites.unshift({
@@ -50,23 +51,23 @@ export function addFavorite(baseQuery, filtersData, mergedQuery) {
 
 /**
  * 删除收藏
- * @param {string} baseQuery - 基础查询
+ * @param {string} query - 完整查询（baseQuery + 筛选），作为身份键
  */
-export function removeFavorite(baseQuery) {
-    const target = state.favorites.find(f => f.baseQuery === baseQuery);
+export function removeFavorite(query) {
+    const target = state.favorites.find(f => f.query === query);
     if (target && target.system) return; // 系统规则不可删除
-    state.favorites = state.favorites.filter(f => f.baseQuery !== baseQuery);
+    state.favorites = state.favorites.filter(f => f.query !== query);
     persistFavorites();
 }
 
 /**
  * 判断是否已收藏
- * @param {string} baseQuery
+ * @param {string} query - 完整查询（baseQuery + 筛选），作为身份键
  * @returns {boolean}
  */
-export function isFavorite(baseQuery) {
-    if (!baseQuery) return false;
-    return state.favorites.some(f => f.baseQuery === baseQuery);
+export function isFavorite(query) {
+    if (!query) return false;
+    return state.favorites.some(f => !f.system && f.query === query);
 }
 
 /**
@@ -98,19 +99,20 @@ export function getFavorites(filterText) {
 
 /**
  * 切换收藏状态
- * @param {string} baseQuery
- * @param {object|null} filtersData
- * @param {string} mergedQuery
+ * @param {string} baseQuery - 查询框内容（不含筛选），用于判定是否纯内置规则
+ * @param {object|null} filtersData - 当前筛选条件数据
+ * @param {string} mergedQuery - 合并后的完整 query（baseQuery + 筛选），作为收藏身份键
  * @returns {'added'|'removed'|'noop'}
  */
 export function toggleFavorite(baseQuery, filtersData, mergedQuery) {
     if (!baseQuery || !baseQuery.trim()) return 'noop';
 
-    // 系统规则不可切换收藏
-    if (isSystemFavorite(baseQuery)) return 'noop';
+    // 纯内置规则（无筛选）不可切换收藏；但「内置规则 + 用户筛选」是独立组合，可收藏
+    const hasFilters = filtersData && Object.keys(filtersData).length > 0;
+    if (!hasFilters && isSystemFavorite(baseQuery)) return 'noop';
 
-    if (isFavorite(baseQuery)) {
-        removeFavorite(baseQuery);
+    if (isFavorite(mergedQuery)) {
+        removeFavorite(mergedQuery);
         return 'removed';
     } else {
         addFavorite(baseQuery, filtersData, mergedQuery);
@@ -139,13 +141,13 @@ export function handleClearAllFavorites() {
 
 /**
  * 更新用户收藏的别名
- * @param {string} baseQuery
+ * @param {string} query - 完整查询（baseQuery + 筛选），作为身份键
  * @param {string} newName
  * @returns {boolean}
  */
-export function updateFavoriteName(baseQuery, newName) {
-    if (!baseQuery || !newName || !newName.trim()) return false;
-    const fav = state.favorites.find(f => f.baseQuery === baseQuery);
+export function updateFavoriteName(query, newName) {
+    if (!query || !newName || !newName.trim()) return false;
+    const fav = state.favorites.find(f => f.query === query);
     if (!fav || fav.system) return false;
     fav.name = newName.trim();
     persistFavorites();
@@ -154,13 +156,13 @@ export function updateFavoriteName(baseQuery, newName) {
 
 /**
  * 更新用户收藏的标签（始终保留 "用户" 标签）
- * @param {string} baseQuery
+ * @param {string} query - 完整查询（baseQuery + 筛选），作为身份键
  * @param {string[]} tags
  * @returns {boolean}
  */
-export function updateFavoriteTags(baseQuery, tags) {
-    if (!baseQuery) return false;
-    const fav = state.favorites.find(f => f.baseQuery === baseQuery);
+export function updateFavoriteTags(query, tags) {
+    if (!query) return false;
+    const fav = state.favorites.find(f => f.query === query);
     if (!fav || fav.system) return false;
     // 始终包含 '用户'，去重
     const merged = ['用户', ...(tags || []).filter(t => t !== '用户')];
@@ -557,7 +559,13 @@ export function updateFavoriteButtonState() {
     const input = document.getElementById('searchInput');
     const baseQuery = input ? input.value.trim() : '';
 
-    if (baseQuery && isSystemFavorite(baseQuery)) {
+    // 是否有筛选条件；决定「内置规则 + 筛选」是否为一条独立可收藏的组合
+    const filterQuery = getFilterQuery();
+    const hasFilters = !!filterQuery;
+    const currentQuery = filterQuery ? `${baseQuery} && ${filterQuery}` : baseQuery;
+
+    // 仅当纯内置规则（无筛选）时显示灰色「内置」态
+    if (baseQuery && !hasFilters && isSystemFavorite(baseQuery)) {
         btn.classList.add('builtin');
         btn.classList.remove('favorited');
         btn.title = '内置规则，不可取消收藏';
@@ -566,7 +574,7 @@ export function updateFavoriteButtonState() {
 
     btn.classList.remove('builtin');
 
-    if (baseQuery && isFavorite(baseQuery)) {
+    if (baseQuery && isFavorite(currentQuery)) {
         btn.classList.add('favorited');
         btn.title = '取消收藏';
     } else {
@@ -588,16 +596,17 @@ export function handleFavoriteClick() {
         return;
     }
 
-    // 内置规则不可切换收藏
-    if (isSystemFavorite(baseQuery)) {
+    // 有查询：计算筛选 + 合并后的完整 query
+    const filtersData = getActiveFiltersData();
+    const filterQuery = getFilterQuery();
+    const hasFilters = !!filterQuery;
+    const mergedQuery = filterQuery ? `${baseQuery} && ${filterQuery}` : baseQuery;
+
+    // 仅纯内置规则（无筛选）不可切换收藏；「内置规则 + 筛选」是独立组合，可收藏
+    if (!hasFilters && isSystemFavorite(baseQuery)) {
         showToast('内置规则，不可取消收藏', 'info');
         return;
     }
-
-    // 有查询：切换收藏状态
-    const filtersData = getActiveFiltersData();
-    const filterQuery = getFilterQuery();
-    const mergedQuery = filterQuery ? `${baseQuery} && ${filterQuery}` : baseQuery;
 
     const result = toggleFavorite(baseQuery, filtersData, mergedQuery);
     if (result === 'added') {
