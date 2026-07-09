@@ -78,12 +78,21 @@ jobs:
           } | sudo tee /etc/apt/sources.list.d/arm64.list
       
           sudo apt-get update
+
+          GLIB_VERSION="$(apt-cache madison libglib2.0-dev-bin-linux:arm64 | awk 'NR==1 {print $3}')"
+          if [ -z "${GLIB_VERSION}" ]; then
+            echo "Unable to resolve libglib2.0-dev-bin-linux:arm64 version"
+            exit 1
+          fi
       
           sudo apt-get install -y --allow-downgrades \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
             pkg-config \
             libssl-dev:arm64 \
+            libglib2.0-dev:arm64=${GLIB_VERSION} \
+            libglib2.0-dev-bin:arm64=${GLIB_VERSION} \
+            libglib2.0-dev-bin-linux:arm64=${GLIB_VERSION} \
             libwebkit2gtk-4.1-dev:arm64 \
             libgtk-3-dev:arm64 \
             libayatana-appindicator3-dev:arm64 \
@@ -131,4 +140,3 @@ jobs:
           args: >
             --target ${{ matrix.target }}
             ${{ matrix.bundles && format('--bundles {0}', matrix.bundles) || '' }}
-
