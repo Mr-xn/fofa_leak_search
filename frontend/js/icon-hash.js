@@ -2,6 +2,7 @@
 
 import { showToast } from './utils.js';
 import { updateFilterInput } from './ui.js';
+import { updateSearchButtonState } from './search.js';
 import { info as logInfo, error as logError } from './logger.js';
 import { isTauri, fetchUrlRaw } from './tauri-bridge.js';
 
@@ -314,7 +315,7 @@ function processFile(file) {
 /**
  * 显示计算结果
  */
-function showIconHashResult(hash) {
+export function showIconHashResult(hash) {
     _lastIconHash = hash;
     document.getElementById('iconHashValue').textContent = hash;
     document.getElementById('iconHashResult').classList.add('show');
@@ -361,4 +362,48 @@ export function applyIconHashFilter() {
     updateFilterInput('icon_hash', _lastIconHash);
     closeIconHashModal();
     showToast(`已填入筛选: icon_hash="${_lastIconHash}"`, 'success');
+}
+
+/**
+ * 匹配已有 icon_hash 子句：捕获操作符 (= 或 !=) 与旧值
+ * 例：'icon_hash="old"' → ["icon_hash=\"old\"", "=", "old"]
+ */
+const ICON_HASH_CLAUSE_RE = /icon_hash\s*(!=|=)\s*"([^"]*)"/i;
+
+/**
+ * 把 icon_hash="<hash>" 智能插入主查询框（searchInput）
+ *
+ * - 空：直接写入
+ * - 有内容、无 icon_hash 子句：末尾追加 ` && icon_hash="<hash>"`
+ * - 已有 icon_hash 子句：保留原操作符，仅替换 hash 值
+ */
+export function applyIconHashToQuery() {
+    if (!_lastIconHash) {
+        showToast('请先计算 hash', 'error');
+        return;
+    }
+    const input = document.getElementById('searchInput');
+    const clause = `icon_hash="${_lastIconHash}"`;
+    const current = (input && input.value) ? input.value.trim() : '';
+
+    if (!current) {
+        input.value = clause;
+    } else {
+        const m = current.match(ICON_HASH_CLAUSE_RE);
+        if (m) {
+            // 保留原操作符 m[1]，替换旧值 m[2]
+            const newClause = `icon_hash${m[1]}"${_lastIconHash}"`;
+            input.value = current.replace(ICON_HASH_CLAUSE_RE, newClause);
+        } else {
+            // 复用末尾已有连接符（避免拼接出「&& &&」重复连接符）；无则默认 &&
+            const trail = current.match(/\s*(&&|\|\|)\s*$/);
+            const op = trail ? trail[1] : '&&';
+            const base = current.replace(/\s*(?:&&|\|\|)\s*$/, '');
+            input.value = `${base} ${op} ${clause}`;
+        }
+    }
+
+    updateSearchButtonState();
+    closeIconHashModal();
+    showToast(`已填入查询语句: icon_hash="${_lastIconHash}"`, 'success');
 }
