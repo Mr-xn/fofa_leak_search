@@ -62,6 +62,15 @@ async fn check_github_update_cmd(
     proxy::check_github_update(state).await
 }
 
+/// 通过已配置代理的 reqwest client 拉取任意 URL 的原始字节（base64 返回），用于 favicon 等场景
+#[tauri::command]
+async fn fetch_url_raw_cmd(
+    state: tauri::State<'_, proxy::AppState>,
+    url: String,
+) -> Result<proxy::FetchedRaw, String> {
+    proxy::fetch_url_raw(state, url).await
+}
+
 /// 用系统默认浏览器打开 URL（健壮版）
 /// 优先级: open::that() > 系统命令 > 错误
 #[tauri::command]
@@ -192,7 +201,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, dedup::dedup_results, dedup::dedup_single])
+        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, fetch_url_raw_cmd, dedup::dedup_results, dedup::dedup_single])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

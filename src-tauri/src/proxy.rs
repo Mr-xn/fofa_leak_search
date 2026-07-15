@@ -1,4 +1,5 @@
 use axum::{extract::Query, http::StatusCode, response::Json, routing::get, Router};
+use base64::Engine as _;
 use reqwest::{header, Client};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -308,6 +309,69 @@ pub async fn check_github_update(
     Ok(json)
 }
 
+// ==================== 任意 URL 原始字节获取（favicon 等） ====================
+
+/// 校验 URL 仅允许 http/https 且必须有 host。
+/// 与 lib.rs 中 open_url 的 validate_url 同语义，这里本地实现以避免跨模块暴露私有函数。
+fn validate_http_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("无效的 URL: {}", e))?;
+    match parsed.scheme() {
+        "http" | "https" => {}
+        other => return Err(format!("不支持的协议: {}，仅允许 http/https", other)),
+    }
+    if parsed.host_str().is_none() {
+        return Err("URL 缺少主机名".to_string());
+    }
+    Ok(())
+}
+
+/// 通过已配置代理的 reqwest client 拉取任意 URL 的原始字节（base64 编码返回）。
+/// 用于 favicon 等：前端 webview 原生 fetch 不经代理且受 CORS/安全策略限制，统一走 Rust 侧。
+#[derive(Debug, serde::Serialize)]
+pub struct FetchedRaw {
+    pub content_type: String,
+    pub size: usize,
+    pub data_base64: String,
+}
+
+pub async fn fetch_url_raw(
+    state: tauri::State<'_, AppState>,
+    url: String,
+) -> Result<FetchedRaw, String> {
+    validate_http_url(&url)?;
+
+    let client = state.get_client();
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("读取响应失败: {}", e))?;
+    let size = bytes.len();
+    let data_base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+    Ok(FetchedRaw {
+        content_type,
+        size,
+        data_base64,
+    })
+}
+
 // ==================== 代理服务器 ====================
 
 pub async fn start_proxy_server(state: AppState) -> (u16, broadcast::Sender<()>) {
@@ -448,5 +512,35 @@ async fn proxy_request(
                 .to_string(),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_http_url_accepts_http_and_https() {
+        assert!(validate_http_url("http://41.111.135.55:8080/images/favicon.ico").is_ok());
+        assert!(validate_http_url("https://example.com/favicon.ico").is_ok());
+        assert!(validate_http_url("http://localhost:9200/").is_ok());
+    }
+
+    #[test]
+    fn test_validate_http_url_rejects_non_http_schemes() {
+        // ftp/file/javascript 等非 http(s) 协议应被拒
+        assert!(validate_http_url("ftp://example.com/favicon.ico").is_err());
+        assert!(validate_http_url("file:///etc/passwd").is_err());
+        assert!(validate_http_url("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn test_validate_http_url_rejects_invalid_and_missing_host() {
+        // 非法格式
+        assert!(validate_http_url("not a url at all").is_err());
+        // 缺 host（仅 scheme）
+        assert!(validate_http_url("http://").is_err());
+        // 空串
+        assert!(validate_http_url("").is_err());
     }
 }
