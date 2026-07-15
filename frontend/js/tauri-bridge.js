@@ -103,6 +103,19 @@ export function openUrl(url) {
 }
 
 /**
+ * 通过 Tauri Rust 侧拉取任意 URL 的原始字节（base64 返回）
+ * 使用已配置代理的 reqwest client，用于 favicon 等场景：
+ * 前端 webview 原生 fetch 不经代理且受 CORS/安全策略限制。
+ * @param {string} url - 目标 URL（http/https）
+ * @returns {Promise<{content_type: string, size: number, data_base64: string}|null>}
+ *   Tauri 模式返回 {content_type, size, data_base64}；非 Tauri 返回 null（由调用方回退到 fetch）
+ */
+export async function fetchUrlRaw(url) {
+    if (!isTauri()) return null;
+    return await window.__TAURI_INTERNALS__.invoke('fetch_url_raw_cmd', { url });
+}
+
+/**
  * 通过 Tauri Rust 侧检查 GitHub 更新（使用已配置的代理）
  * @returns {Promise<{version: string, url: string}|null>}
  */

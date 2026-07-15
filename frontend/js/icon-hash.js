@@ -3,6 +3,7 @@
 import { showToast } from './utils.js';
 import { updateFilterInput } from './ui.js';
 import { info as logInfo, error as logError } from './logger.js';
+import { isTauri, fetchUrlRaw } from './tauri-bridge.js';
 
 // ==================== 32-bit 整数运算辅助 ====================
 
@@ -105,6 +106,20 @@ export function bytesToBase64(bytes) {
         binary += String.fromCharCode(bytes[i]);
     }
     return btoa(binary);
+}
+
+/**
+ * 将 Base64 字符串转换回 Uint8Array（Rust fetch_url_raw 返回的字节载体）
+ * @param {string} b64 - 标准 Base64 字符串（无换行）
+ * @returns {Uint8Array}
+ */
+export function base64ToBytes(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
 }
 
 /**
@@ -220,6 +235,12 @@ export function closeIconHashModal() {
 
 /**
  * 从 URL 获取 favicon 并计算 hash
+ *
+ * 取字节路径：
+ * - Tauri 环境：调用 Rust fetch_url_raw_cmd，经已配置代理的 reqwest client 拉取，
+ *   绕过 webview 原生 fetch 的代理/CORS/明文 http 限制（历史 bug：代理对 favicon 无效）。
+ * - 非 Tauri 环境（浏览器开发态）：回退到原生 fetch。
+ * 拿到字节后统一走既有 computeIconHash（哈希算法不变）。
  */
 export async function fetchIconFromUrl() {
     const urlInput = document.getElementById('iconHashUrlInput');
@@ -229,23 +250,34 @@ export async function fetchIconFromUrl() {
         return;
     }
 
+    const useRust = isTauri();
     showToast('正在获取 favicon...', 'info');
-    logInfo('iconhash', '开始获取 favicon', { url });
+    logInfo('iconhash', '开始获取 favicon', { url, via: useRust ? 'rust' : 'fetch' });
     try {
-        const response = await fetch(url);
-        logInfo('iconhash', 'favicon 响应', { url, status: response.status, ok: response.ok });
-        if (!response.ok) {
-            showToast(`获取失败: HTTP ${response.status}`, 'error');
-            return;
+        let bytes;
+        if (useRust) {
+            // Rust 侧失败（HTTP 错/网络错/URL 非法）时 invoke 会 reject，进入下方 catch
+            const raw = await fetchUrlRaw(url);
+            if (!raw || !raw.data_base64) {
+                throw new Error('未返回数据');
+            }
+            bytes = base64ToBytes(raw.data_base64);
+        } else {
+            const response = await fetch(url);
+            logInfo('iconhash', 'favicon 响应', { url, status: response.status, ok: response.ok });
+            if (!response.ok) {
+                showToast(`获取失败: HTTP ${response.status}`, 'error');
+                return;
+            }
+            const buffer = await response.arrayBuffer();
+            bytes = new Uint8Array(buffer);
         }
-        const buffer = await response.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
         const hash = computeIconHash(bytes);
-        logInfo('iconhash', 'favicon hash 计算完成', { url, byteLength: bytes.length, hash });
+        logInfo('iconhash', 'favicon hash 计算完成', { url, via: useRust ? 'rust' : 'fetch', byteLength: bytes.length, hash });
         showIconHashResult(hash);
         showToast('计算完成', 'success');
     } catch (e) {
-        logError('iconhash', 'favicon 获取失败', { url, message: e.message || String(e) });
+        logError('iconhash', 'favicon 获取失败', { url, via: useRust ? 'rust' : 'fetch', message: e.message || String(e) });
         showToast(`获取失败: ${e.message}`, 'error');
     }
 }
