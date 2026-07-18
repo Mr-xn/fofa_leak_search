@@ -62,21 +62,29 @@ export async function downloadNodeScreenshot(node, filenamePrefix) {
     }
     const scale = window.devicePixelRatio || 2;
     const bgColor = getComputedBgColor(node);
-    const canvas = await window.html2canvas(node, {
+    const renderedCanvas = await window.html2canvas(node, {
         backgroundColor: bgColor,
         scale,
         logging: false,
         useCORS: true,
     });
-    // 右下角 © 水印
+    // 新建干净 canvas（避免 html2canvas 内部上下文状态干扰水印绘制）
+    const canvas = document.createElement('canvas');
+    canvas.width = renderedCanvas.width;
+    canvas.height = renderedCanvas.height;
     const ctx = canvas.getContext('2d');
-    const fontSize = Math.round(11 * scale);
+    ctx.drawImage(renderedCanvas, 0, 0);
+    // 右下角 © 水印
+    const fontSize = Math.round(12 * scale);
+    ctx.save();
     ctx.font = `italic ${fontSize}px -apple-system, "Segoe UI", "Helvetica Neue", sans-serif`;
-    ctx.fillStyle = 'rgba(128,128,128,0.65)';
+    ctx.fillStyle = 'rgba(200,200,200,0.7)';
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
     ctx.fillText('© 截图来自 FOFA Leak Search',
         canvas.width - Math.round(16 * scale),
-        canvas.height - Math.round(10 * scale));
+        canvas.height - Math.round(8 * scale));
+    ctx.restore();
     const blob = await new Promise((resolve) => {
         canvas.toBlob(resolve, 'image/png');
     });
