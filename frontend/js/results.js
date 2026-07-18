@@ -18,6 +18,8 @@ export function setFetchResults(fn) {
 let resizing = null;
 let startX = 0;
 let startWidth = 0;
+// 用户拖动后的列宽缓存：field → px。renderTable 时复用，跨排序/分页/重搜保留。
+const columnWidths = new Map();
 
 function initColumnResize() {
     // 列宽拖动由 inline onmousedown 触发，mousemove/mouseup 仅在拖动期间绑定。
@@ -47,6 +49,10 @@ function handleResize(e) {
     // 拖多少即显示多宽，超出部分由 td 的 overflow+ellipsis 隐藏。
     const newWidth = Math.max(80, startWidth + diff);
     resizing.style.width = `${newWidth}px`;
+    // 持久化到 Map：sortTable/renderTable 重新生成 thead 时仍能恢复用户拖动后的宽度。
+    // 与 getColumnWidth 一致存带 px 的字符串，避免模板拼接出无单位的非法 CSS。
+    const field = resizing.dataset.field;
+    if (field) columnWidths.set(field, `${newWidth}px`);
 }
 
 function stopResize() {
@@ -58,6 +64,19 @@ function stopResize() {
     document.body.style.userSelect = '';
     document.removeEventListener('mousemove', handleResize);
     document.removeEventListener('mouseup', stopResize);
+    // mousedown→mouseup 会被浏览器合成 click 事件，冒泡到 th 触发排序，
+    // 必须在捕获阶段吞掉这一次 click，否则拖动会触发排序并重置列宽。
+    document.addEventListener('click', suppressClickAfterDrag, { capture: true, once: true });
+}
+
+function suppressClickAfterDrag(e) {
+    e.stopPropagation();
+    e.preventDefault();
+}
+
+// 测试辅助：清空列宽缓存（vitest 同文件 it 块共享模块状态）
+export function _resetColumnWidthsForTest() {
+    columnWidths.clear();
 }
 
 // ==================== IPv6 地址检测 ====================
@@ -139,13 +158,15 @@ export function renderTable(fields) {
                 <span class="th-inner">#</span>
             </th>
             ${fields.map((field, index) => {
-                const colWidth = getColumnWidth(field, fields.length);
+                // 优先用用户拖动后的宽度；否则用字段默认宽度。
+                // 不设内联 min-width（CSS th { min-width: 80px } 已是 floor），否则拖窄会被阻止。
+                const colWidth = columnWidths.get(field) || getColumnWidth(field, fields.length);
                 // 尾列右边缘 = 表格右边框，不渲染拖拽手柄（与首列 # 一样无意义且视觉突兀）
                 const isLast = index === fields.length - 1;
                 const handle = isLast ? '' : `
                     <div class="resize-handle" onmousedown="event.stopPropagation(); window.startColumnResize(event, this.parentElement)"></div>`;
                 return `
-                <th onclick="window.sortTable(${index})" style="cursor: pointer; width: ${colWidth}; min-width: ${colWidth};">
+                <th onclick="window.sortTable(${index})" data-field="${field}" style="cursor: pointer; width: ${colWidth};">
                     <span class="th-inner">
                         <span class="th-label">${FIELD_LABELS[field] || field} <span class="sort-icon" id="sort-${index}">↕</span></span>
                         <span class="copy-col-btn" onclick="event.stopPropagation(); window.copyColumn(${index})" title="复制此列">📋</span>
