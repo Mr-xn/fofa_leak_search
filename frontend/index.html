@@ -201,6 +201,10 @@
                     统计概览
                 </div>
                 <div class="stats-header-right">
+                    <button class="btn btn-sm" onclick="downloadStatsScreenshot()" title="下载统计截图（PNG）">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        截图
+                    </button>
                     <button class="btn btn-sm" onclick="refreshStats()" title="刷新统计">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                         刷新
@@ -825,6 +829,7 @@
         </div>
     </div>
 
+    <script src="vendor/html2canvas.min.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
