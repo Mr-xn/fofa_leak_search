@@ -1738,7 +1738,9 @@ th .resize-handle {
     right: 0;
     top: 0;
     bottom: 0;
-    width: 4px;
+    /* 命中区从 4px 加宽到 8px：原来太窄极易点偏落到 th 上触发排序，
+       用户感觉"拖窄不生效"其实是没抓到手柄。 */
+    width: 8px;
     cursor: col-resize;
     background: transparent;
     z-index: 1;
