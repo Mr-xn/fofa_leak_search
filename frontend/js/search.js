@@ -3,7 +3,7 @@
 import { state, STORAGE_KEYS } from './config.js';
 import { showToast, formatNumber, escapeHtml, formatTime } from './utils.js';
 import { normalizeQuery } from './query-normalizer.js';
-import { addToHistory, deleteHistoryItem, getCacheKey, getFromCache, saveToCache, incrementApiCalls } from './storage.js';
+import { addToHistory, deleteHistoryItem, getCacheKey, getFromCache, saveToCache, incrementApiCalls, incrementDataCount } from './storage.js';
 import { fetchSearchResults } from './api.js';
 import { getSelectedFields, showApiKeyModal, getFilterQuery, getActiveFiltersData, hasActiveFilters } from './ui.js';
 import { renderTable, renderPagination } from './results.js';
@@ -206,6 +206,8 @@ export async function fetchResults() {
 
             // 记录 API 调用统计
             incrementApiCalls(data.consumed_fpoint || 0);
+            // 累计当月数据获取量（仅 API 命中分支；缓存命中不重复计）
+            incrementDataCount(data.results?.length || 0);
         } catch (error) {
             logError('search', '搜索请求网络错误', { message: error.message, query: state.currentQuery });
             showToast(`网络错误: ${error.message}`, 'error');

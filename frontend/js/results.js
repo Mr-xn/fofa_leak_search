@@ -4,7 +4,7 @@ import { state, FIELD_LABELS, STORAGE_KEYS } from './config.js';
 import { escapeHtml, formatNumber, showToast, showConfirm } from './utils.js';
 import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
-import { incrementDownloads, incrementApiCalls } from './storage.js';
+import { incrementDownloads, incrementApiCalls, incrementDataCount } from './storage.js';
 import { info as logInfo, warn as logWarn, error as logError, debug as logDebug } from './logger.js';
 import { openUrl } from './tauri-bridge.js';
 
@@ -794,6 +794,7 @@ async function downloadAllAtOnce(size, fields) {
             const filename = `fofa_all_${data.results.length}条_${getTimestamp()}.csv`;
             downloadCSV(fieldList, data.results, filename);
             incrementDownloads();
+            incrementDataCount(data.results.length);
 
             // 计算并统计超出免费上限的F点消耗
             const freeLimit = getFreeDownloadLimit();
@@ -890,6 +891,7 @@ async function downloadPageByPage(startPage, endPage, pageSize, fields, concurre
     const filename = `fofa_pages${startPage}-${endPage}_${allResults.length}条_${getTimestamp()}.csv`;
     downloadCSV(fieldList, allResults, filename);
     incrementDownloads();
+    incrementDataCount(allResults.length);
 
     // 计算并统计超出免费上限的F点消耗
     const freeLimit = getFreeDownloadLimit();
