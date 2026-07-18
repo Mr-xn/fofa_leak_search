@@ -18,7 +18,6 @@ export function setFetchResults(fn) {
 let resizing = null;
 let startX = 0;
 let startWidth = 0;
-let resizeCells = [];
 
 function initColumnResize() {
     // 列宽拖动由 inline onmousedown 触发，mousemove/mouseup 仅在拖动期间绑定。
@@ -32,10 +31,6 @@ function startResize(e, th) {
     startX = e.clientX;
     startWidth = th.offsetWidth;
 
-    const thIndex = Array.from(th.parentElement.children).indexOf(th);
-    const table = th.closest('table');
-    resizeCells = table ? Array.from(table.querySelectorAll(`tbody tr td:nth-child(${thIndex + 1})`)) : [];
-
     th.querySelector('.resize-handle')?.classList.add('active');
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -48,14 +43,10 @@ function handleResize(e) {
     if (!resizing) return;
 
     const diff = e.clientX - startX;
+    // table-layout: fixed 下，仅 th 的 width 决定整列宽度；
+    // 拖多少即显示多宽，超出部分由 td 的 overflow+ellipsis 隐藏。
     const newWidth = Math.max(80, startWidth + diff);
     resizing.style.width = `${newWidth}px`;
-    resizing.style.minWidth = `${newWidth}px`;
-    resizing.style.maxWidth = `${newWidth}px`;
-
-    resizeCells.forEach(td => {
-        td.style.maxWidth = `${newWidth}px`;
-    });
 }
 
 function stopResize() {
@@ -63,7 +54,6 @@ function stopResize() {
         resizing.querySelector('.resize-handle')?.classList.remove('active');
         resizing = null;
     }
-    resizeCells = [];
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
     document.removeEventListener('mousemove', handleResize);
@@ -147,17 +137,19 @@ export function renderTable(fields) {
         <tr>
             <th style="width: 50px; min-width: 50px; max-width: 50px;">
                 <span class="th-inner">#</span>
-                <div class="resize-handle"></div>
             </th>
             ${fields.map((field, index) => {
                 const colWidth = getColumnWidth(field, fields.length);
+                // 尾列右边缘 = 表格右边框，不渲染拖拽手柄（与首列 # 一样无意义且视觉突兀）
+                const isLast = index === fields.length - 1;
+                const handle = isLast ? '' : `
+                    <div class="resize-handle" onmousedown="event.stopPropagation(); window.startColumnResize(event, this.parentElement)"></div>`;
                 return `
                 <th onclick="window.sortTable(${index})" style="cursor: pointer; width: ${colWidth}; min-width: ${colWidth};">
                     <span class="th-inner">
                         <span class="th-label">${FIELD_LABELS[field] || field} <span class="sort-icon" id="sort-${index}">↕</span></span>
                         <span class="copy-col-btn" onclick="event.stopPropagation(); window.copyColumn(${index})" title="复制此列">📋</span>
-                    </span>
-                    <div class="resize-handle" onmousedown="event.stopPropagation(); window.startColumnResize(event, this.parentElement)"></div>
+                    </span>${handle}
                 </th>
                 `;
             }).join('')}
@@ -177,9 +169,8 @@ export function renderTable(fields) {
                 const cellClass = cellClasses.join(' ');
                 const recoveredCell = field === 'link' ? recoverEllipsizedLink(cell, row, fields) : cell;
                 const displayValue = (field === 'ip' && isIpv6) ? formatIPv6(recoveredCell) : recoveredCell;
-                const colWidth = getColumnWidth(field, fields.length);
                 return `
-                    <td title="${escapeHtml(recoveredCell)}" class="${cellClass}" style="max-width: ${colWidth};">
+                    <td title="${escapeHtml(recoveredCell)}" class="${cellClass}">
                         ${formatCell(displayValue, field)}
                     </td>
                 `;
