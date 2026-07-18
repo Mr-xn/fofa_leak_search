@@ -1,7 +1,7 @@
 // js/config.js - 配置常量和状态管理
 
 // ==================== 应用版本 ====================
-export const APP_VERSION = '1.2.5';
+export const APP_VERSION = '1.2.6';
 
 // ==================== 全局状态 ====================
 export const state = {

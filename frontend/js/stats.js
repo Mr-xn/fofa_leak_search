@@ -3,6 +3,8 @@
 import { state } from './config.js';
 import { fetchStats } from './api.js';
 import { formatNumber, escapeHtml, showToast } from './utils.js';
+import { downloadNodeScreenshot } from './screenshot.js';
+import { error as logError } from './logger.js';
 
 // 统计聚合支持的字段
 export const STATS_FIELDS = ['protocol', 'port', 'country', 'domain', 'os', 'server', 'org', 'asn', 'asset_type', 'title', 'fid', 'icp'];
@@ -220,4 +222,29 @@ export function refreshStats() {
     // 清除缓存，强制重新加载
     statsCache.delete(state.currentQuery);
     loadStats();
+}
+
+// ==================== 统计截图 ====================
+/**
+ * 下载 #statsContent 节点为 PNG 截图
+ * 判断节点存在且有实际数据（非加载中态），再调通用截图。
+ */
+export async function downloadStatsScreenshot() {
+    const node = document.getElementById('statsContent');
+    if (!node) {
+        showToast('暂无统计数据', 'info');
+        return;
+    }
+    // 加载中态判断：节点内只剩/包含 .stats-loading 占位
+    if (node.querySelector('.stats-loading')) {
+        showToast('暂无统计数据', 'info');
+        return;
+    }
+    try {
+        await downloadNodeScreenshot(node, 'fofa_stats');
+        showToast('已下载统计截图', 'success');
+    } catch (e) {
+        logError('stats', '截图下载失败', { message: e.message || String(e) });
+        showToast(`截图失败: ${e.message || e}`, 'error');
+    }
 }

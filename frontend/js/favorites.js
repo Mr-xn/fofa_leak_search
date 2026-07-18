@@ -370,7 +370,11 @@ function _renderUserTags(fav, index, builtin) {
     const tags = Array.isArray(fav.tags) ? fav.tags : ['用户'];
     if (tags.length === 0) return '';
     const chips = tags.map(t => {
-        const canQuickRemove = t !== '用户' && !builtin.has(t);
+        // 取消标签（从当前用户收藏移除）≠ 删除系统标签本身。
+        // 内置标签名（如 unauth / opencms）复用到用户收藏上时，仍应允许单独取消——
+        // 这只改本地 fav.tags 数组，绝不触碰 FOFA_RULES。
+        // 唯一不可移除的是「用户」标签（addFavorite 强制保留的概念标记）。
+        const canQuickRemove = t !== '用户';
         return `<span class="fav-tag-chip${canQuickRemove ? ' fav-tag-chip-removable' : ''}" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}${canQuickRemove ? `<button class="fav-tag-chip-remove" data-tag-index="${index}" data-tag="${escapeHtml(t)}" title="从当前规则移除此标签">×</button>` : ''}</span>`;
     }).join('');
     return `<div class="fav-user-tags">

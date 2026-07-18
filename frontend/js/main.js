@@ -16,7 +16,7 @@ import { doSearch, showSuggestions, hideSuggestions, handleInputChange, fetchRes
 import { sortTable, goToPage, downloadCurrentPage, downloadAllPages, closeDownloadModal, startDownload, hideDownloadProgress, copyColumn, setFetchResults, openAllLinks } from './results.js';
 import { showUserInfo, refreshUserInfo } from './user-info.js';
 import { fetchAccountInfo } from './api.js';
-import { toggleStats, refreshStats, updateStatsButtonState } from './stats.js';
+import { toggleStats, refreshStats, updateStatsButtonState, downloadStatsScreenshot } from './stats.js';
 import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, renameCustomTag } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter, applyIconHashToQuery } from './icon-hash.js';
@@ -70,6 +70,7 @@ window.hideDownloadProgress = hideDownloadProgress;
 window.openUrl = openUrl;
 window.toggleStats = toggleStats;
 window.refreshStats = refreshStats;
+window.downloadStatsScreenshot = downloadStatsScreenshot;
 window.selectSuggestion = (query) => {
     document.getElementById('searchInput').value = query;
     hideSuggestions();
