@@ -1676,7 +1676,9 @@ table {
     min-width: 100%;
     border-collapse: collapse;
     font-size: 13px;
-    table-layout: auto;
+    /* fixed 布局：列宽严格由 th 的 width 决定，内容超出由 td 的 overflow+ellipsis 处理，
+       这样拖动列宽时“拖多少就显示多宽”，不会被单元格内容强行撑开。 */
+    table-layout: fixed;
 }
 
 thead {
@@ -1750,33 +1752,28 @@ th .resize-handle.active {
 td {
     padding: 9px 14px;
     border-bottom: 1px solid var(--border-light);
-    max-width: 280px;
+    /* fixed 布局下列宽由 th 控制；这里只负责视觉截断：超出部分省略号隐藏，
+       列宽足够时自然完整显示。 */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text);
 }
 
-/* IP 列特殊样式 */
+/* IP 列特殊样式（等宽字体；列宽统一由 th 决定） */
 td.ip-cell {
-    max-width: 160px;
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
     font-size: 12px;
 }
 
-/* IPv6 地址截断显示 */
+/* IPv6 地址等宽显示 */
 td.ipv6-cell {
-    max-width: 200px;
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
     font-size: 12px;
 }
 
-/* link 列显示完整 URL：覆盖 td 的 nowrap/ellipsis */
+/* link 列也遵循统一截断规则：列窄时省略号隐藏，列宽足够时完整显示 */
 td.link-cell {
-    max-width: 520px !important;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
     line-height: 1.45;
 }
 
