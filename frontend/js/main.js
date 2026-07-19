@@ -20,7 +20,7 @@ import { toggleStats, refreshStats, updateStatsButtonState, downloadStatsScreens
 import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, renameCustomTag } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter, applyIconHashToQuery } from './icon-hash.js';
-import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
+import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, planQueriesAsync, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
 import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
 import { getSelectedFields } from './ui.js';
 import { setLoggingEnabled, setLogLevel, info as logInfo, warn as logWarn, error as logError } from './logger.js';
@@ -261,13 +261,25 @@ window.startSmartDownload = async () => {
     document.getElementById('smartPhasePlan').style.display = '';
     document.getElementById('smartModalEl').classList.add('expanded');
 
-    smartPlanSteps = planQueries(state.currentQuery, stats, freeLimit, maxTotalLimit);
+    // 异步规划：对超大桶触发递归探测，提升数据覆盖率
+    const planResult = await planQueriesAsync(state.currentQuery, stats, freeLimit, maxTotalLimit, (info) => {
+        if (info.query) {
+            document.getElementById('smartPlanBadge').textContent =
+                `正在探测 ${info.probed + 1}/${info.total}...`;
+        }
+    });
+    smartPlanSteps = planResult.steps;
     renderPlanSteps();
 
-    // 更新方案数量徽标
+    // 更新方案数量徽标（含探测次数提示）
     const planCount = smartPlanSteps.length;
     const planTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
-    document.getElementById('smartPlanBadge').textContent = `${planCount} 步 · ${planTotal.toLocaleString()} 条`;
+    const probeHint = planResult.probeCount > 0 ? ` · 探测 ${planResult.probeCount} 次` : '';
+    const coveragePct = planResult.targetSize > 0
+        ? Math.min(100, Math.round(planTotal / planResult.targetSize * 100))
+        : 100;
+    document.getElementById('smartPlanBadge').textContent =
+        `${planCount} 步 · ${planTotal.toLocaleString()} 条${probeHint} · 覆盖 ${coveragePct}%`;
 
     setPhaseIcon('smartPhasePlanIcon', 'done', '✓');
     document.getElementById('smartExecuteBtn').style.display = '';

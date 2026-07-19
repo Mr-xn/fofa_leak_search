@@ -206,92 +206,291 @@ export function buildQuery(baseQuery, conditions) {
 
 // ==================== 查询规划 ====================
 
+/** 递归探测最大深度（避免无限链式打 API）
+ * 深度 3 = 原始探测 + 最多 2 层子探测，适合高度集中的数据（如 cloud 资产 90%+ 同 ASN） */
+const MAX_PROBE_DEPTH = 3;
+
+/** 当某桶占总数比例超过此阈值时，认为比例估算不可信，需走递归探测 */
+const PROBE_RATIO_THRESHOLD = 0.5;
+
+/** trySubSplit 的最低覆盖率：若生成的步骤覆盖不到 entry 的此比例，认为拆分失败 */
+const SUBSPLIT_MIN_COVERAGE = 0.5;
+
 /**
- * 根据统计数据规划拆分查询方案
+ * 规划结果包装：包含步骤数组和元信息（探测次数、原始/目标量等）
+ * @typedef {Object} PlanResult
+ * @property {Array<Object>} steps - 扁平化后的查询步骤
+ * @property {number} probeCount - 递归探测触发的 fetchStats 次数（同步规划时为 0）
+ * @property {number} targetSize - 本次目标数据量（min(stats.size, maxTotalLimit)）
+ * @property {number} coveredSize - 步骤估算总和
+ */
+
+/**
+ * 同步规划：仅依据现有 stats 拆分，不发起额外 API 调用。
+ * 用于简单情况（无超大桶或单维度即可切完）。
+ *
+ * 修复要点：
+ * 1. 超大桶 trySubSplit 失败时不再静默丢弃，而是产出 needsProbe=true 的占位步骤
+ * 2. 估算公式使用 originalSize（未被 maxTotalLimit 裁剪的真实总数）
+ * 3. 桶占比 > PROBE_RATIO_THRESHOLD 时强制标记 needsProbe
+ *
  * @param {string} baseQuery - 基础查询
  * @param {Object} stats - analyzeDimensions 返回的统计数据
  * @param {number} freeLimit - 单次查询限制
  * @param {number} [maxTotalLimit=SMART_DOWNLOAD_HARD_LIMIT] - 本次总上限
- * @returns {Array<Object>} 查询计划步骤数组
+ * @returns {PlanResult} 规划结果（含 steps 与元信息）
  */
 export function planQueries(baseQuery, stats, freeLimit, maxTotalLimit = SMART_DOWNLOAD_HARD_LIMIT) {
+    // 原始总数（用于估算公式的分母，避免被裁剪污染）
+    const originalSize = stats.size;
     // 实际可规划的数据量 = min(stats.size, maxTotalLimit)
     const planSize = Math.min(stats.size, maxTotalLimit);
 
     // Case 1: 总量在限制内，无需拆分
     if (planSize <= freeLimit) {
-        return [{
+        const desc = planSize < stats.size
+            ? `部分结果 (${planSize.toLocaleString()}/${stats.size.toLocaleString()} 条，受配额限制)`
+            : `全部结果 (${planSize.toLocaleString()} 条)`;
+        return {
+            steps: [{
+                id: 1,
+                query: baseQuery,
+                estimatedSize: planSize,
+                description: desc,
+                status: 'pending'
+            }],
+            probeCount: 0,
+            targetSize: planSize,
+            coveredSize: planSize
+        };
+    }
+
+    // 构造规划用 stats：保留 originalSize 字段，避免污染估算
+    const planStats = { ...stats, size: planSize, originalSize };
+
+    // Case 2: 按单维度拆分
+    // 字段选择策略：优先选「可直接成桶（无需探测）」数量最多的字段，
+    // 避免选只有 1 个桶的维度（如 country=JP 全量）作主维度。
+    // 排序键：smallBucketCount DESC, bucketCount DESC, total DESC
+    const rankedFields = PLANNABLE_FIELDS
+        .map(field => {
+            const aggs = planStats.aggs?.[field] || [];
+            const total = aggs.reduce((s, a) => s + a.count, 0);
+            const smallBucketCount = aggs.filter(a => a.count <= freeLimit).length;
+            return { field, aggs, total, bucketCount: aggs.length, smallBucketCount };
+        })
+        .filter(f => f.aggs.length > 0)
+        .sort((a, b) =>
+            b.smallBucketCount - a.smallBucketCount ||
+            b.bucketCount - a.bucketCount ||
+            b.total - a.total
+        );
+
+    for (const { field, aggs } of rankedFields) {
+        const plan = trySplitByField(baseQuery, planStats, field, aggs, freeLimit);
+        if (plan) {
+            const coveredSize = plan.reduce((s, st) => s + st.estimatedSize, 0);
+            return {
+                steps: plan,
+                probeCount: 0,
+                targetSize: planSize,
+                coveredSize
+            };
+        }
+    }
+
+    // Fallback: 返回单条查询（标记 needsProbe 让上层异步入口处理）
+    const desc = planSize < stats.size
+        ? `部分结果 (${planSize.toLocaleString()}/${stats.size.toLocaleString()} 条，受配额限制)`
+        : `全部结果 (${planSize.toLocaleString()} 条，需探测)`;
+    return {
+        steps: [{
             id: 1,
             query: baseQuery,
             estimatedSize: planSize,
-            description: planSize < stats.size
-                ? `部分结果 (${planSize.toLocaleString()}/${stats.size.toLocaleString()} 条，受配额限制)`
-                : `全部结果 (${planSize.toLocaleString()} 条)`,
-            status: 'pending'
-        }];
+            description: desc,
+            status: 'pending',
+            needsProbe: true
+        }],
+        probeCount: 0,
+        targetSize: planSize,
+        coveredSize: planSize
+    };
+}
+
+/**
+ * 异步规划：在同步规划基础上，对 needsProbe 步骤发起递归探测。
+ *
+ * 探测规则：
+ * - 仅当步骤标记 needsProbe=true 时触发
+ * - 对子查询调用 fetchStats 获取真实分布，再用新 stats 重新切分
+ * - 深度 ≤ MAX_PROBE_DEPTH；超过则保留原步骤并打 warning
+ * - 探测失败（网络/API 错误）时降级，保留原步骤避免阻塞
+ *
+ * @param {string} baseQuery - 基础查询
+ * @param {Object} stats - analyzeDimensions 返回的统计数据
+ * @param {number} freeLimit - 单次查询限制
+ * @param {number} [maxTotalLimit=SMART_DOWNLOAD_HARD_LIMIT] - 本次总上限
+ * @param {Function} [onProgress] - 探测进度回调 ({ probed, total, query }) => void
+ * @returns {Promise<PlanResult>} 规划结果
+ */
+export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimit = SMART_DOWNLOAD_HARD_LIMIT, onProgress) {
+    // 1. 先跑同步规划
+    const syncResult = planQueries(baseQuery, stats, freeLimit, maxTotalLimit);
+
+    // 2. 找出需要探测的步骤
+    const probeSteps = syncResult.steps.filter(s => s.needsProbe);
+    if (probeSteps.length === 0) {
+        return syncResult;
     }
 
-    // 构造裁剪后的 stats 用于规划
-    const planStats = { ...stats, size: planSize };
+    // 3. 递归探测每个 needsProbe 步骤
+    let probeCount = 0;
+    const finalSteps = [];
+    const remainingSteps = syncResult.steps.filter(s => !s.needsProbe);
 
-    // Case 2: 按单维度拆分
-    for (const field of PLANNABLE_FIELDS) {
-        const aggs = planStats.aggs?.[field];
-        if (!aggs || aggs.length === 0) continue;
+    for (const probeStep of probeSteps) {
+        if (onProgress) {
+            onProgress({ probed: probeCount, total: probeSteps.length, query: probeStep.query });
+        }
 
-        const plan = trySplitByField(baseQuery, planStats, field, aggs, freeLimit);
-        if (plan) return plan;
+        const subResult = await probeAndSplit(probeStep.query, freeLimit, MAX_PROBE_DEPTH, stats.size);
+        probeCount += subResult.probeCount;
+
+        if (subResult.steps && subResult.steps.length > 0) {
+            // 用探测结果替换原步骤；保留原描述前缀以便追溯
+            const origDesc = probeStep.description || '';
+            subResult.steps.forEach((s, idx) => {
+                s.description = s.description || '';
+                if (idx === 0 && origDesc) {
+                    s.description = `${origDesc} → ${s.description}`;
+                }
+                finalSteps.push(s);
+            });
+        } else {
+            // 探测失败/无结果，降级保留原步骤
+            logWarn('smartdl', '探测失败，保留原步骤', { query: probeStep.query });
+            finalSteps.push(probeStep);
+        }
     }
 
-    // Case 3: 多维度组合拆分 — 选择覆盖最多的维度作为主维度
-    const bestField = PLANNABLE_FIELDS.reduce((best, field) => {
-        const aggs = planStats.aggs?.[field];
-        if (!aggs) return best;
-        const total = aggs.reduce((s, a) => s + a.count, 0);
-        return total > best.total ? { field, total } : best;
-    }, { field: null, total: 0 });
-
-    if (bestField.field) {
-        const plan = trySplitByField(baseQuery, planStats, bestField.field, planStats.aggs[bestField.field], freeLimit);
-        if (plan) return plan;
+    if (onProgress) {
+        onProgress({ probed: probeCount, total: probeSteps.length, query: null });
     }
 
-    // Fallback: 返回单条查询（可能超限，但避免卡住）
-    return [{
-        id: 1,
-        query: baseQuery,
-        estimatedSize: planSize,
-        description: planSize < stats.size
-            ? `部分结果 (${planSize.toLocaleString()}/${stats.size.toLocaleString()} 条，受配额限制)`
-            : `全部结果 (${planSize.toLocaleString()} 条，无法自动拆分)`,
-        status: 'pending'
-    }];
+    // 合并 + 重排 id
+    const allSteps = [...remainingSteps, ...finalSteps];
+    reassignStepIds(allSteps);
+
+    const coveredSize = allSteps.reduce((s, st) => s + st.estimatedSize, 0);
+    return {
+        steps: allSteps,
+        probeCount,
+        targetSize: syncResult.targetSize,
+        coveredSize
+    };
+}
+
+/**
+ * 递归探测一个子查询：fetchStats → planQueries → 收集 needsProbe 子步骤 → 继续探测
+ * @param {string} subQuery - 子查询语句
+ * @param {number} freeLimit
+ * @param {number} depth - 剩余探测深度
+ * @param {number} [parentOriginalSize] - 父级原始总数（用于估算可信度判断）
+ * @returns {Promise<{steps: Array, probeCount: number}>}
+ */
+async function probeAndSplit(subQuery, freeLimit, depth, parentOriginalSize) {
+    if (depth <= 0) {
+        // 达到深度上限，返回占位步骤（标记可能超限）
+        return {
+            steps: [{
+                id: 0,
+                query: subQuery,
+                estimatedSize: parentOriginalSize || freeLimit,
+                description: `(达到探测深度上限，可能超限)`,
+                status: 'pending'
+            }],
+            probeCount: 0
+        };
+    }
+
+    let subStats;
+    try {
+        const result = await fetchStats(subQuery, PLANNABLE_FIELDS.join(','));
+        incrementApiCalls();
+        if (result.error || !result.size) {
+            logWarn('smartdl', '探测 fetchStats 返回错误', { subQuery, errmsg: result.errmsg });
+            return { steps: [], probeCount: 1 };
+        }
+        subStats = result;
+    } catch (e) {
+        logError('smartdl', '探测 fetchStats 异常', { subQuery, message: e.message || String(e) });
+        return { steps: [], probeCount: 1 };
+    }
+
+    // 用子查询的真实 stats 重新规划（maxTotalLimit 传 Infinity 让规划器用全部 size）
+    const subPlan = planQueries(subQuery, subStats, freeLimit, Infinity);
+    let probeCount = 1;
+
+    const probeChildren = subPlan.steps.filter(s => s.needsProbe);
+    if (probeChildren.length === 0) {
+        return { steps: subPlan.steps, probeCount };
+    }
+
+    // 继续递归探测子步骤
+    const finalSteps = [];
+    const keepSteps = subPlan.steps.filter(s => !s.needsProbe);
+    for (const child of probeChildren) {
+        const childResult = await probeAndSplit(child.query, freeLimit, depth - 1, subStats.size);
+        probeCount += childResult.probeCount;
+        if (childResult.steps.length > 0) {
+            finalSteps.push(...childResult.steps);
+        } else {
+            // 子探测失败，保留原步骤
+            finalSteps.push(child);
+        }
+    }
+
+    const allSubSteps = [...keepSteps, ...finalSteps];
+    reassignStepIds(allSubSteps);
+    return { steps: allSubSteps, probeCount };
+}
+
+/**
+ * 重新分配步骤 id（顺序 1..N）
+ * @param {Array<Object>} steps
+ */
+function reassignStepIds(steps) {
+    steps.forEach((s, idx) => { s.id = idx + 1; });
 }
 
 /**
  * 尝试按单个字段拆分查询
+ *
+ * 关键修复：超大桶 trySubSplit 失败时不再静默丢弃，
+ * 而是产出 needsProbe=true 的占位步骤，让异步规划器后续探测。
+ *
  * @param {string} baseQuery
- * @param {Object} stats
+ * @param {Object} stats - 含 originalSize 的规划用 stats
  * @param {string} field
  * @param {Array} aggs - 该字段的聚合数据 [{count, name}, ...]
  * @param {number} freeLimit
- * @returns {Array<Object>|null} 计划步骤数组，无法拆分时返回 null
+ * @returns {Array<Object>|null} 计划步骤数组（可能含 needsProbe 步骤），无法拆分时返回 null
  */
 function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
+    const originalSize = stats.originalSize || stats.size;
     const steps = [];
     let stepId = 1;
     let coveredCount = 0;
 
-    // 处理 top 5 中的每个值
     const usedValues = [];
     let i = 0;
 
     while (i < aggs.length) {
         const entry = aggs[i];
 
-        // 单个值即可容纳
         if (entry.count <= freeLimit) {
-            // 尝试将后续小值合并到同一批次
+            // 单个值即可容纳，尝试合并后续小值
             const batch = [entry.name];
             let batchCount = entry.count;
             let j = i + 1;
@@ -315,9 +514,14 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
             coveredCount += batchCount;
             i = j;
         } else {
-            // 单个值超限，尝试添加次级维度拆分
+            // 单个值超限，先尝试用现有次级维度拆分
             const subSplit = trySubSplit(baseQuery, field, entry, stats, freeLimit);
-            if (subSplit) {
+
+            // 判断是否需要探测：桶占比 > PROBE_RATIO_THRESHOLD 时比例估算不可信
+            const bucketRatio = entry.count / originalSize;
+            const needsProbeByRatio = bucketRatio > PROBE_RATIO_THRESHOLD;
+
+            if (subSplit && !needsProbeByRatio) {
                 subSplit.forEach(s => {
                     s.id = stepId++;
                     steps.push(s);
@@ -326,65 +530,62 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
                 coveredCount += entry.count;
                 i++;
             } else {
-                // 无法拆分此值，跳过（后续会被余量覆盖或标记）
+                // 关键修复：不静默丢弃，产出 needsProbe 占位步骤
+                // 不计入 coveredCount，让"其他"逻辑知道这部分还未真正规划
+                const query = buildQuery(baseQuery, [{ field, op: '=', values: [entry.name] }]);
+                const probeReason = needsProbeByRatio
+                    ? `超大桶占比 ${(bucketRatio * 100).toFixed(1)}%，比例估算不可信`
+                    : `现有维度无法拆分`;
+                steps.push({
+                    id: stepId++,
+                    query,
+                    estimatedSize: entry.count,
+                    description: `${field.toUpperCase()}: ${entry.name} (${entry.count.toLocaleString()} 条，待探测)`,
+                    status: 'pending',
+                    needsProbe: true,
+                    probeReason
+                });
+                // 标记该值已处理（避免被"其他"重复计入），但不增加 coveredCount
                 usedValues.push(entry.name);
-                coveredCount += entry.count;
                 i++;
             }
         }
     }
 
     // 检查余量：不在 top 5 中的数据
-    const remaining = stats.size - coveredCount;
-    if (remaining > 0) {
-        if (remaining <= freeLimit) {
-            // 余量可单次查询
+    // 注意：超大桶的 entry.count 没有计入 coveredCount，所以 remaining 会包含它
+    // 但我们已经为超大桶单独产出了 needsProbe 步骤，这里需要避免重复
+    const topTotal = aggs.reduce((s, a) => s + a.count, 0);
+    const realRemaining = Math.max(0, stats.size - topTotal);
+
+    if (realRemaining > 0) {
+        if (realRemaining <= freeLimit) {
             const query = buildQuery(baseQuery, [{ field, op: '!=', values: usedValues }]);
             steps.push({
                 id: stepId++,
                 query,
-                estimatedSize: remaining,
-                description: `其他 ${field} (${remaining.toLocaleString()} 条)`,
+                estimatedSize: realRemaining,
+                description: `其他 ${field} (${realRemaining.toLocaleString()} 条)`,
                 status: 'pending'
             });
-        } else if (usedValues.length > 0) {
-            // 余量仍超限，需要进一步拆分 — 使用可规划字段中排除当前字段后的维度
-            const secondaryField = PLANNABLE_FIELDS.find(f => f !== field && stats.aggs?.[f]?.length > 0);
-            if (secondaryField) {
-                const negQuery = buildQuery(baseQuery, [{ field, op: '!=', values: usedValues }]);
-                const subStats = { size: remaining, aggs: stats.aggs };
-                const subPlan = trySplitByField(negQuery, subStats, secondaryField, stats.aggs[secondaryField] || [], freeLimit);
-                if (subPlan) {
-                    subPlan.forEach(s => {
-                        s.id = stepId++;
-                        steps.push(s);
-                    });
-                } else {
-                    // 无法进一步拆分
-                    const query = buildQuery(baseQuery, [{ field, op: '!=', values: usedValues }]);
-                    steps.push({
-                        id: stepId++,
-                        query,
-                        estimatedSize: remaining,
-                        description: `其他 ${field} (${remaining.toLocaleString()} 条，可能超限)`,
-                        status: 'pending'
-                    });
-                }
-            } else {
-                const query = buildQuery(baseQuery, [{ field, op: '!=', values: usedValues }]);
-                steps.push({
-                    id: stepId++,
-                    query,
-                    estimatedSize: remaining,
-                    description: `其他 ${field} (${remaining.toLocaleString()} 条，可能超限)`,
-                    status: 'pending'
-                });
-            }
+        } else {
+            // 余量超限，也标记 needsProbe
+            const query = buildQuery(baseQuery, [{ field, op: '!=', values: usedValues }]);
+            steps.push({
+                id: stepId++,
+                query,
+                estimatedSize: realRemaining,
+                description: `其他 ${field} (${realRemaining.toLocaleString()} 条，待探测)`,
+                status: 'pending',
+                needsProbe: true
+            });
         }
     }
 
-    // 验证：所有步骤都必须在限制内才认为拆分成功
-    const allUnderLimit = steps.every(s => s.estimatedSize <= freeLimit);
+    // 验证：所有非 needsProbe 步骤都必须在限制内
+    // needsProbe 步骤会由异步规划器处理，这里跳过校验
+    const nonProbeSteps = steps.filter(s => !s.needsProbe);
+    const allUnderLimit = nonProbeSteps.every(s => s.estimatedSize <= freeLimit);
     if (!allUnderLimit) return null;
 
     return steps;
@@ -392,15 +593,21 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
 
 /**
  * 尝试对单个超限值添加次级维度进行拆分
+ *
+ * 修复：估算公式使用 originalSize（未被裁剪的真实总数），
+ * 避免分母被 maxTotalLimit 污染导致双倍误差。
+ *
  * @param {string} baseQuery
  * @param {string} primaryField - 主维度字段名
  * @param {Object} entry - {count, name}
- * @param {Object} stats - 完整统计数据
+ * @param {Object} stats - 完整统计数据（含 originalSize）
  * @param {number} freeLimit
  * @returns {Array<Object>|null} 子步骤数组，无法拆分时返回 null
  */
 function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
-    // 找一个可用的次级维度
+    // 修复：用 originalSize 避免被裁剪污染
+    const originalSize = stats.originalSize || stats.size;
+
     const secondaryField = PLANNABLE_FIELDS.find(f => f !== primaryField && stats.aggs?.[f]?.length > 0);
     if (!secondaryField) return null;
 
@@ -410,8 +617,8 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
     const usedValues = [];
 
     for (const subEntry of subAggs) {
-        // 估算交叉计数：按比例分配
-        const estimatedCrossCount = Math.ceil(entry.count * (subEntry.count / stats.size));
+        // 估算交叉计数：按比例分配（使用 originalSize 作为分母）
+        const estimatedCrossCount = Math.ceil(entry.count * (subEntry.count / originalSize));
         if (estimatedCrossCount > freeLimit) continue;
 
         const query = buildQuery(baseQuery, [
@@ -419,7 +626,7 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
             { field: secondaryField, op: '=', values: [subEntry.name] }
         ]);
         steps.push({
-            id: 0, // 稍后由调用方分配
+            id: 0,
             query,
             estimatedSize: estimatedCrossCount,
             description: `${primaryField}=${entry.name} & ${secondaryField}=${subEntry.name} (~${estimatedCrossCount.toLocaleString()})`,
@@ -445,10 +652,18 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
         });
     }
 
-    // 验证拆分有效性
     if (steps.length === 0) return null;
     const allUnderLimit = steps.every(s => s.estimatedSize <= freeLimit);
-    return allUnderLimit ? steps : null;
+    if (!allUnderLimit) return null;
+
+    // 覆盖率检查：次级维度 top 桶本身超限被 skip 时，会留下大量未覆盖部分。
+    // 此时比例估算已不可信（独立分布假设失败），返回 null 让上层走递归探测。
+    const coverageRatio = coveredCount / entry.count;
+    if (coverageRatio < SUBSPLIT_MIN_COVERAGE) {
+        return null;
+    }
+
+    return steps;
 }
 
 /**
