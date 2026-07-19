@@ -163,6 +163,8 @@ window.startSmartDownload = async () => {
     startBtn.textContent = '分析中...';
 
     const freeLimit = getFreeLimit();
+    // 暴露给 renderPlanSteps 判断步骤是否超限
+    window.__smartFreeLimit = freeLimit;
 
     // Step 0: 配额预检查
     const vipLevel = getVipLevel();
@@ -274,12 +276,27 @@ window.startSmartDownload = async () => {
     // 更新方案数量徽标（含探测次数提示）
     const planCount = smartPlanSteps.length;
     const planTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
+    const probeFailedCount = smartPlanSteps.filter(s => s.probeFailed).length;
     const probeHint = planResult.probeCount > 0 ? ` · 探测 ${planResult.probeCount} 次` : '';
+    // 覆盖率基于 planResult.coveredSize（已排除 probeFailed 步骤）
+    const confirmedCover = planResult.coveredSize || 0;
     const coveragePct = planResult.targetSize > 0
-        ? Math.min(100, Math.round(planTotal / planResult.targetSize * 100))
+        ? Math.min(100, Math.round(confirmedCover / planResult.targetSize * 100))
         : 100;
+    const failedHint = probeFailedCount > 0 ? ` · ⚠ ${probeFailedCount} 步探测失败` : '';
     document.getElementById('smartPlanBadge').textContent =
-        `${planCount} 步 · ${planTotal.toLocaleString()} 条${probeHint} · 覆盖 ${coveragePct}%`;
+        `${planCount} 步 · ${confirmedCover.toLocaleString()}/${planResult.targetSize.toLocaleString()} 条${probeHint} · 覆盖 ${coveragePct}%${failedHint}`;
+    // 探测失败时禁用执行按钮，避免误操作下载超限数据
+    const execBtn = document.getElementById('smartExecuteBtn');
+    if (probeFailedCount > 0) {
+        execBtn.disabled = true;
+        execBtn.textContent = '探测失败，请查日志';
+        execBtn.title = `${probeFailedCount} 个步骤探测失败，执行会触发 FOFA 单次限制。请查看诊断日志确认失败原因`;
+    } else {
+        execBtn.disabled = false;
+        execBtn.textContent = '执行下载';
+        execBtn.title = '';
+    }
 
     setPhaseIcon('smartPhasePlanIcon', 'done', '✓');
     document.getElementById('smartExecuteBtn').style.display = '';
@@ -392,17 +409,21 @@ function renderPlanSteps() {
     if (!grid) return;
 
     grid.innerHTML = smartPlanSteps.map(step => {
-        const statusClass = `step-${step.status}`;
-        const iconMap = { pending: '○', running: '⟳', done: '✓', error: '✗' };
-        const iconClass = `phase-${step.status}`;
+        // probeFailed 步骤视觉降级为 error 风格，但不改变真实 status（保留 pending 语义）
+        const visualStatus = step.probeFailed ? 'error' : step.status;
+        const statusClass = `step-${visualStatus}`;
+        const iconMap = { pending: '○', running: '⟳', done: '✓', error: '⚠' };
+        const iconClass = `phase-${visualStatus}`;
         const retryInfo = step.retryCount > 1 ? ` <span style="color:var(--warning);font-size:10px;">重试${step.retryCount}/${MAX_RETRIES}</span>` : '';
         const errorInfo = step.status === 'error' && step.errorMsg ? `<div class="step-error-msg">${escapeHtml(step.errorMsg)}</div>` : '';
         const resultInfo = step.status === 'done' && step.results ? ` <span style="color:var(--success);font-size:10px;">(${step.results.length}条)</span>` : '';
+        const overLimitHint = step.estimatedSize > (window.__smartFreeLimit || 10000) && step.probeFailed
+            ? ` <span style="color:var(--error);font-size:10px;">(超限 ${step.estimatedSize.toLocaleString()} 条)</span>` : '';
         return `
             <div class="smart-plan-item ${statusClass}">
-                <span class="step-status-icon ${iconClass}">${iconMap[step.status]}</span>
+                <span class="step-status-icon ${iconClass}">${iconMap[visualStatus]}</span>
                 <div class="step-content">
-                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}</div>
+                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}${overLimitHint}</div>
                     <div class="step-query" title="${escapeHtml(step.query)}">${escapeHtml(step.query)}</div>
                     ${errorInfo}
                 </div>

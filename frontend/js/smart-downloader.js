@@ -216,6 +216,22 @@ const PROBE_RATIO_THRESHOLD = 0.5;
 /** trySubSplit 的最低覆盖率：若生成的步骤覆盖不到 entry 的此比例，认为拆分失败 */
 const SUBSPLIT_MIN_COVERAGE = 0.5;
 
+/** 探测调用前/间的延迟（毫秒）
+ * FOFA stats 接口对单 Key 限速约 1 次/秒（errmsg [45012] 请求速度过快 / HTTP 429）
+ * 留 1.5s 余量，确保不触发速率限制 */
+const PROBE_DELAY_MS = 1500;
+
+/** 探测调用最大重试次数（仅对 429/45012 限流重试，其他错误直接放弃） */
+const PROBE_MAX_RETRIES = 3;
+
+/** 检测 FOFA 限流错误（errmsg 或 HTTP status）*/
+function isRateLimited(errmsg, httpStatus) {
+    if (httpStatus === 429) return true;
+    if (!errmsg) return false;
+    // FOFA 错误码 45012 = 请求速度过快，45011 = 月度配额耗尽（不重试）
+    return errmsg.includes('45012') || errmsg.includes('请求速度过快');
+}
+
 /**
  * 规划结果包装：包含步骤数组和元信息（探测次数、原始/目标量等）
  * @typedef {Object} PlanResult
@@ -369,7 +385,11 @@ export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimi
             });
         } else {
             // 探测失败/无结果，降级保留原步骤
+            // 标记 probeFailed 让 UI 显示警告（不要静默降级）
             logWarn('smartdl', '探测失败，保留原步骤', { query: probeStep.query });
+            probeStep.probeFailed = true;
+            probeStep.needsProbe = false; // 不再尝试探测
+            probeStep.description = `${probeStep.description} ⚠ 探测失败，此步可能超限`;
             finalSteps.push(probeStep);
         }
     }
@@ -382,13 +402,94 @@ export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimi
     const allSteps = [...remainingSteps, ...finalSteps];
     reassignStepIds(allSteps);
 
-    const coveredSize = allSteps.reduce((s, st) => s + st.estimatedSize, 0);
+    // 覆盖量只统计真正切好的步骤（probeFailed 步骤的 estimatedSize 不可信）
+    const coveredSize = allSteps
+        .filter(s => !s.probeFailed)
+        .reduce((s, st) => s + st.estimatedSize, 0);
     return {
         steps: allSteps,
         probeCount,
         targetSize: syncResult.targetSize,
         coveredSize
     };
+}
+
+/**
+ * 带延迟和限流重试的 fetchStats 封装（专用于探测路径）
+ *
+ * FOFA /api/search/stats 接口对单 Key 限速约 1 次/秒（errmsg [45012] / HTTP 429）。
+ * 维度分析 → 探测 → 子探测 链路会连续打 stats，必须显式间隔 + 429 退避。
+ *
+ * 行为：
+ * - 调用前 sleep PROBE_DELAY_MS（首次除外，由 caller 在维度分析后显式等待）
+ * - 收到 429/45012 → 指数退避重试（1.5s, 3s），共发起 PROBE_MAX_RETRIES 次请求
+ *   （最后一次失败不再退避，直接返回 null）
+ * - 其他错误（401、45011 配额耗尽等）→ 直接放弃，不重试
+ * - 成功 → 返回 stats 对象；彻底失败 → 返回 null
+ *
+ * @param {string} query - 查询语句
+ * @param {boolean} [isFirstCall=false] - 是否首次调用（首次跳过前置延迟）
+ * @returns {Promise<Object|null>} stats 对象，失败时返回 null
+ */
+async function fetchStatsForProbe(query, isFirstCall = false) {
+    if (!isFirstCall) {
+        await sleep(PROBE_DELAY_MS);
+    }
+
+    for (let attempt = 1; attempt <= PROBE_MAX_RETRIES; attempt++) {
+        try {
+            const result = await fetchStats(query, PLANNABLE_FIELDS.join(','));
+            incrementApiCalls();
+
+            if (result.error) {
+                // FOFA 业务错误：区分限流 vs 其他
+                if (isRateLimited(result.errmsg)) {
+                    if (attempt < PROBE_MAX_RETRIES) {
+                        const backoffMs = attempt * PROBE_DELAY_MS; // attempt=1 → 1.5s, attempt=2 → 3s
+                        logWarn('smartdl', `探测触发 FOFA 限流，退避重试`, {
+                            query, errmsg: result.errmsg, attempt, backoffMs
+                        });
+                        await sleep(backoffMs);
+                        continue;
+                    }
+                    logWarn('smartdl', '探测 fetchStats 限流重试耗尽', {
+                        query, errmsg: result.errmsg, attempts: attempt
+                    });
+                    return null;
+                }
+                // 非限流错误（401/45011 等），不重试
+                logWarn('smartdl', '探测 fetchStats 返回错误（非限流，不重试）', {
+                    query, errmsg: result.errmsg
+                });
+                return null;
+            }
+
+            if (!result.size) {
+                logWarn('smartdl', '探测 fetchStats 返回空 size', { query, size: result.size });
+                return null;
+            }
+
+            if (attempt > 1) {
+                logInfo('smartdl', '探测 fetchStats 重试成功', { query, attempt });
+            }
+            return result;
+        } catch (e) {
+            // 网络异常/超时：不区分原因，统一按指数退避重试
+            if (attempt < PROBE_MAX_RETRIES) {
+                const backoffMs = attempt * PROBE_DELAY_MS;
+                logWarn('smartdl', `探测 fetchStats 网络异常，退避重试`, {
+                    query, error: e.message || String(e), attempt, backoffMs
+                });
+                await sleep(backoffMs);
+                continue;
+            }
+            logError('smartdl', '探测 fetchStats 异常（重试耗尽）', {
+                query, message: e.message || String(e), attempts: attempt
+            });
+            return null;
+        }
+    }
+    return null;
 }
 
 /**
@@ -414,17 +515,9 @@ async function probeAndSplit(subQuery, freeLimit, depth, parentOriginalSize) {
         };
     }
 
-    let subStats;
-    try {
-        const result = await fetchStats(subQuery, PLANNABLE_FIELDS.join(','));
-        incrementApiCalls();
-        if (result.error || !result.size) {
-            logWarn('smartdl', '探测 fetchStats 返回错误', { subQuery, errmsg: result.errmsg });
-            return { steps: [], probeCount: 1 };
-        }
-        subStats = result;
-    } catch (e) {
-        logError('smartdl', '探测 fetchStats 异常', { subQuery, message: e.message || String(e) });
+    const subStats = await fetchStatsForProbe(subQuery);
+    if (!subStats) {
+        // fetchStatsForProbe 已记录日志并重试过，仍失败则降级
         return { steps: [], probeCount: 1 };
     }
 
