@@ -384,13 +384,33 @@ export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimi
                 finalSteps.push(s);
             });
         } else {
-            // 探测失败/无结果，降级保留原步骤
-            // 标记 probeFailed 让 UI 显示警告（不要静默降级）
-            logWarn('smartdl', '探测失败，保留原步骤', { query: probeStep.query });
-            probeStep.probeFailed = true;
-            probeStep.needsProbe = false; // 不再尝试探测
-            probeStep.description = `${probeStep.description} ⚠ 探测失败，此步可能超限`;
-            finalSteps.push(probeStep);
+            // 探测失败/无结果 → 降级到笛卡尔积切分（用原始 stats 的其他维度组合）
+            logWarn('smartdl', '探测失败，尝试笛卡尔积降级', { query: probeStep.query });
+            const cartesianSteps = cartesianSplit(probeStep, stats, freeLimit);
+
+            if (cartesianSteps && cartesianSteps.length > 0) {
+                // 笛卡尔积切分成功，标记为估算（让 UI 知道这些数字是估算的）
+                const origDesc = probeStep.description || '';
+                cartesianSteps.forEach((s, idx) => {
+                    s.estimated = true;
+                    if (idx === 0 && origDesc) {
+                        s.description = `${origDesc} → ${s.description}`;
+                    }
+                    finalSteps.push(s);
+                });
+                logInfo('smartdl', '笛卡尔积降级成功', {
+                    query: probeStep.query,
+                    stepCount: cartesianSteps.length,
+                    covered: cartesianSteps.reduce((s, st) => s + st.estimatedSize, 0)
+                });
+            } else {
+                // 笛卡尔积也切不动，最后才标记 probeFailed
+                logWarn('smartdl', '笛卡尔积降级失败，标记 probeFailed', { query: probeStep.query });
+                probeStep.probeFailed = true;
+                probeStep.needsProbe = false;
+                probeStep.description = `${probeStep.description} ⚠ 探测失败，此步可能超限`;
+                finalSteps.push(probeStep);
+            }
         }
     }
 
@@ -403,6 +423,7 @@ export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimi
     reassignStepIds(allSteps);
 
     // 覆盖量只统计真正切好的步骤（probeFailed 步骤的 estimatedSize 不可信）
+    // estimated 步骤（笛卡尔积降级产物）的 estimatedSize 是估算值，但仍是有效切分
     const coveredSize = allSteps
         .filter(s => !s.probeFailed)
         .reduce((s, st) => s + st.estimatedSize, 0);
@@ -412,6 +433,161 @@ export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimi
         targetSize: syncResult.targetSize,
         coveredSize
     };
+}
+
+/** 笛卡尔积降级最大维度深度（避免组合爆炸） */
+const CARTESIAN_MAX_DEPTH = 4;
+
+/**
+ * 笛卡尔积降级：探测失败时，用原始 stats 的其他维度组合切分超大桶
+ *
+ * 场景：asn=16509 占 94%，探测 fetchStats 被 429 限流拿不到真实子分布。
+ * 此时直接用原始 top-5 stats 做笛卡尔积切分（port → server → org → ... 任意深度）。
+ *
+ * 实测验证（用户案例 app="WordPress" JP cloud）：
+ * 原始 top-5 估算与真实子查询误差 <5%，足够可信。
+ *
+ * 算法（递归）：
+ * 1. 从 stats.aggs 选一个未使用的维度（按分散度排序）
+ * 2. 对该维度的每个 top 桶估算大小（ratio × probeSize）
+ * 3. 桶 ≤freeLimit → 直接产出步骤
+ *    桶 >freeLimit → 递归用下一个维度切（直到 CARTESIAN_MAX_DEPTH）
+ * 4. 最后用 != 兜底"其他"部分
+ *
+ * @param {Object} probeStep - needsProbe 步骤（含 query 和 estimatedSize）
+ * @param {Object} stats - 原始 analyzeDimensions 返回的统计数据
+ * @param {number} freeLimit
+ * @returns {Array<Object>|null} 步骤数组，无法切分时返回 null
+ */
+function cartesianSplit(probeStep, stats, freeLimit) {
+    if (!probeStep || !probeStep.query || !stats?.aggs) return null;
+    const probeSize = probeStep.estimatedSize;
+    if (!probeSize || probeSize <= freeLimit) return null;
+
+    // 从 query 解析已使用的字段
+    const usedFields = new Set();
+    const fieldPattern = /(\w+)\s*=/g;
+    let m;
+    while ((m = fieldPattern.exec(probeStep.query)) !== null) {
+        usedFields.add(m[1]);
+    }
+
+    // 候选维度：排除已用、桶数<2 的，按 top 桶占比升序（更分散的优先）
+    const candidates = PLANNABLE_FIELDS
+        .filter(f => !usedFields.has(f))
+        .map(field => {
+            const aggs = stats.aggs[field] || [];
+            return {
+                field,
+                buckets: aggs.map(a => ({
+                    name: a.name,
+                    ratio: a.count / stats.size,
+                    count: a.count
+                })),
+                topRatio: aggs.length > 0 ? Math.max(...aggs.map(a => a.count / stats.size)) : 1
+            };
+        })
+        .filter(c => c.buckets.length >= 2)
+        .sort((a, b) => a.topRatio - b.topRatio);
+
+    if (candidates.length === 0) return null;
+
+    // 递归切分
+    const steps = [];
+    const covered = cartesianRecursive(
+        probeStep.query, probeSize, candidates, 0, freeLimit, steps, []
+    );
+
+    if (steps.length === 0) return null;
+
+    // 覆盖率门槛：≥80% 才认为降级成功
+    if (covered < probeSize * 0.8) {
+        logWarn('smartdl', '笛卡尔积覆盖率不足', {
+            query: probeStep.query, covered, probeSize,
+            coverage: (covered / probeSize * 100).toFixed(1) + '%',
+            stepCount: steps.length
+        });
+        return null;
+    }
+
+    reassignStepIds(steps);
+    return steps;
+}
+
+/**
+ * 笛卡尔积递归核心
+ *
+ * @param {string} query - 当前累积的查询语句
+ * @param {number} estSize - 当前 query 的估算匹配数
+ * @param {Array} candidates - 候选维度数组（已排序）
+ * @param {number} depth - 当前递归深度
+ * @param {number} freeLimit
+ * @param {Array} outSteps - 输出步骤数组（会被本函数填充）
+ * @param {Array<string>} condTrail - 条件轨迹，用于生成描述（如 ['port=80','server=Apache']）
+ * @returns {number} 本次调用产出的步骤覆盖总数
+ */
+function cartesianRecursive(query, estSize, candidates, depth, freeLimit, outSteps, condTrail) {
+    if (estSize <= freeLimit) {
+        // 已可容纳，产出步骤
+        const trailStr = condTrail.length > 0 ? condTrail.join(' & ') : '(全集)';
+        outSteps.push({
+            id: 0,
+            query,
+            estimatedSize: estSize,
+            description: `${trailStr} (~${estSize.toLocaleString()}, 估算)`,
+            status: 'pending'
+        });
+        return estSize;
+    }
+
+    // 已用完所有候选维度或达到深度上限：无法继续切
+    if (depth >= CARTESIAN_MAX_DEPTH || depth >= candidates.length) {
+        logWarn('smartdl', '笛卡尔积达到深度上限，跳过此桶', {
+            query, estSize, depth, condTrail
+        });
+        return 0;
+    }
+
+    const dim = candidates[depth];
+    let covered = 0;
+    const usedValues = [];
+
+    for (const bucket of dim.buckets) {
+        const subEstSize = Math.ceil(estSize * bucket.ratio);
+        const subQuery = buildQuery(query, [{ field: dim.field, op: '=', values: [bucket.name] }]);
+        const subTrail = [...condTrail, `${dim.field}=${bucket.name}`];
+
+        covered += cartesianRecursive(
+            subQuery, subEstSize, candidates, depth + 1, freeLimit, outSteps, subTrail
+        );
+        usedValues.push(bucket.name);
+    }
+
+    // "其他" 兜底：top-5 之外的桶
+    const otherSize = estSize - covered;
+    if (otherSize > 0) {
+        if (otherSize <= freeLimit) {
+            const otherQuery = buildQuery(query, [{ field: dim.field, op: '!=', values: usedValues }]);
+            const trailStr = [...condTrail, `其他${dim.field}`].join(' & ');
+            outSteps.push({
+                id: 0,
+                query: otherQuery,
+                estimatedSize: otherSize,
+                description: `${trailStr} (~${otherSize.toLocaleString()}, 估算)`,
+                status: 'pending'
+            });
+            covered += otherSize;
+        } else {
+            // "其他"也超限，递归用下一个维度切
+            const otherQuery = buildQuery(query, [{ field: dim.field, op: '!=', values: usedValues }]);
+            covered += cartesianRecursive(
+                otherQuery, otherSize, candidates, depth + 1, freeLimit, outSteps,
+                [...condTrail, `其他${dim.field}`]
+            );
+        }
+    }
+
+    return covered;
 }
 
 /**

@@ -277,6 +277,7 @@ window.startSmartDownload = async () => {
     const planCount = smartPlanSteps.length;
     const planTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
     const probeFailedCount = smartPlanSteps.filter(s => s.probeFailed).length;
+    const estimatedCount = smartPlanSteps.filter(s => s.estimated).length;
     const probeHint = planResult.probeCount > 0 ? ` · 探测 ${planResult.probeCount} 次` : '';
     // 覆盖率基于 planResult.coveredSize（已排除 probeFailed 步骤）
     const confirmedCover = planResult.coveredSize || 0;
@@ -284,8 +285,10 @@ window.startSmartDownload = async () => {
         ? Math.min(100, Math.round(confirmedCover / planResult.targetSize * 100))
         : 100;
     const failedHint = probeFailedCount > 0 ? ` · ⚠ ${probeFailedCount} 步探测失败` : '';
+    // 笛卡尔积估算步骤提示（让用户知道这部分覆盖量是估算的）
+    const estimatedHint = estimatedCount > 0 ? ` · ${estimatedCount} 步估算` : '';
     document.getElementById('smartPlanBadge').textContent =
-        `${planCount} 步 · ${confirmedCover.toLocaleString()}/${planResult.targetSize.toLocaleString()} 条${probeHint} · 覆盖 ${coveragePct}%${failedHint}`;
+        `${planCount} 步 · ${confirmedCover.toLocaleString()}/${planResult.targetSize.toLocaleString()} 条${probeHint}${estimatedHint} · 覆盖 ${coveragePct}%${failedHint}`;
     // 探测失败时禁用执行按钮，避免误操作下载超限数据
     const execBtn = document.getElementById('smartExecuteBtn');
     if (probeFailedCount > 0) {
@@ -295,7 +298,9 @@ window.startSmartDownload = async () => {
     } else {
         execBtn.disabled = false;
         execBtn.textContent = '执行下载';
-        execBtn.title = '';
+        execBtn.title = estimatedCount > 0
+            ? `${estimatedCount} 个步骤为估算切分（笛卡尔积降级），实际数据量可能有 ±10% 偏差，executeStep 会请求 freeLimit 兜底`
+            : '';
     }
 
     setPhaseIcon('smartPhasePlanIcon', 'done', '✓');
@@ -417,13 +422,15 @@ function renderPlanSteps() {
         const retryInfo = step.retryCount > 1 ? ` <span style="color:var(--warning);font-size:10px;">重试${step.retryCount}/${MAX_RETRIES}</span>` : '';
         const errorInfo = step.status === 'error' && step.errorMsg ? `<div class="step-error-msg">${escapeHtml(step.errorMsg)}</div>` : '';
         const resultInfo = step.status === 'done' && step.results ? ` <span style="color:var(--success);font-size:10px;">(${step.results.length}条)</span>` : '';
+        // 估算步骤（笛卡尔积降级产物）显示灰色标记，让用户知道这是估算值
+        const estimatedTag = step.estimated ? ` <span style="color:var(--text-muted);font-size:10px;">[估算]</span>` : '';
         const overLimitHint = step.estimatedSize > (window.__smartFreeLimit || 10000) && step.probeFailed
             ? ` <span style="color:var(--error);font-size:10px;">(超限 ${step.estimatedSize.toLocaleString()} 条)</span>` : '';
         return `
             <div class="smart-plan-item ${statusClass}">
                 <span class="step-status-icon ${iconClass}">${iconMap[visualStatus]}</span>
                 <div class="step-content">
-                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}${overLimitHint}</div>
+                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}${estimatedTag}${overLimitHint}</div>
                     <div class="step-query" title="${escapeHtml(step.query)}">${escapeHtml(step.query)}</div>
                     ${errorInfo}
                 </div>
