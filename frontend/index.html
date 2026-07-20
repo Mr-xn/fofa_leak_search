@@ -774,10 +774,20 @@
                     <div class="smart-plan-grid" id="smartPlanGrid"></div>
                 </div>
 
-                <!-- 阶段 3：执行下载 -->
+                <!-- 阶段 3：预查校验（规划完成后显示） -->
+                <div class="smart-phase" id="smartPhasePrefetch" style="display: none;">
+                    <div class="phase-header">
+                        <span class="phase-icon phase-pending" id="smartPhasePrefetchIcon">3</span>
+                        <div class="phase-title">预查校验</div>
+                        <span class="smart-plan-badge" id="smartPrefetchBadge"></span>
+                    </div>
+                    <div class="smart-info-box" id="smartPrefetchInfo" style="display: none;"></div>
+                </div>
+
+                <!-- 阶段 4：执行下载 -->
                 <div class="smart-phase" id="smartPhaseExecute" style="display: none;">
                     <div class="smart-phase-title">
-                        <span class="phase-icon phase-pending" id="smartPhaseExecuteIcon">3</span>
+                        <span class="phase-icon phase-pending" id="smartPhaseExecuteIcon">4</span>
                         执行下载
                     </div>
                     <div class="smart-progress-bar">
@@ -821,6 +831,7 @@
     <!-- 确认弹窗（替代 window.confirm，跨平台一致） -->
     <div class="modal-overlay" id="confirmModal" style="z-index: 10000;">
         <div class="modal" style="max-width: 400px; text-align: center; padding: 28px 24px 20px;">
+            <h3 id="confirmTitle" style="font-size: 16px; font-weight: 600; margin-bottom: 12px; display: none;"></h3>
             <p id="confirmMessage" style="font-size: 14px; line-height: 1.7; margin-bottom: 20px; white-space: pre-wrap;"></p>
             <div class="modal-actions" style="justify-content: center; gap: 10px;">
                 <button class="btn" id="confirmCancelBtn">取消</button>
