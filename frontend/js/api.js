@@ -89,3 +89,39 @@ export async function fetchStats(query, fields) {
     const response = await fetchWithTimeout(url);
     return response.json();
 }
+
+// ==================== 预查探测（用于智能分片预查阶段） ====================
+
+/**
+ * 用 search(size=1) 探测子查询的真实匹配总数
+ *
+ * FOFA 实测行为：
+ * - size=1, page=1 → consumed_fpoint=0（不扣 F 点，在免费配额内）
+ * - data.size = 真实匹配总数（非截断后的）
+ * - 独立于 stats 接口的限流（不同端点）
+ *
+ * 用于智能分片的预查阶段：拿到真实总数后判断是否超 maxsize，
+ * 超限则二分拆分，避免执行时翻页扣 F 点。
+ *
+ * @param {string} query - FOFA 查询语句
+ * @returns {Promise<{size: number, error: boolean, errmsg: string, consumedFpoint: number}>}
+ */
+export async function fetchSearchSize(query) {
+    const qbase64 = btoa(unescape(encodeURIComponent(query)));
+    const url = `${state.apiBaseUrl}/api/search/all?key=${state.apiKey}&qbase64=${qbase64}&page=1&size=1&fields=link`;
+    const response = await fetchWithTimeout(url);
+    const data = await response.json();
+    logInfo('api', 'fetchSearchSize 探测', {
+        query,
+        error: data.error,
+        errmsg: data.errmsg,
+        realSize: data.size,
+        consumedFpoint: data.consumed_fpoint
+    });
+    return {
+        size: data.size ?? 0,
+        error: data.error || false,
+        errmsg: data.errmsg || '',
+        consumedFpoint: data.consumed_fpoint || 0
+    };
+}

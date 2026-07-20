@@ -2,10 +2,11 @@
 // 将大查询拆分为多个小查询，以适配免费 API 单次查询限制
 
 import { state, SMART_DOWNLOAD_HARD_LIMIT, VIP_MONTHLY_DATA_QUOTA, VIP_LEVEL_MAP } from './config.js';
-import { fetchStats, fetchSearchResults } from './api.js';
+import { fetchStats, fetchSearchResults, fetchSearchSize } from './api.js';
 import { incrementApiCalls, getUsageStats, incrementDataCount } from './storage.js';
 import { isTauri } from './tauri-bridge.js';
 import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
+import { showConfirm } from './utils.js';
 
 // ==================== 常量 ====================
 
@@ -174,8 +175,9 @@ export function buildQuery(baseQuery, conditions) {
     if (!conditions || conditions.length === 0) return baseQuery;
 
     // 检查 baseQuery 中已存在的字段条件，避免重复
+    // 支持 =、!=、== 三种条件（捕获字段名）
     const existingFields = new Set();
-    const fieldPattern = /(\w+)=/g;
+    const fieldPattern = /(\w+)(?:!=|==|=)/g;
     let match;
     while ((match = fieldPattern.exec(baseQuery)) !== null) {
         existingFields.add(match[1]);
@@ -223,6 +225,129 @@ const PROBE_DELAY_MS = 1500;
 
 /** 探测调用最大重试次数（仅对 429/45012 限流重试，其他错误直接放弃） */
 const PROBE_MAX_RETRIES = 3;
+
+/** 限流自适应：延迟下限（毫秒）— 连续成功后最低压缩到此值 */
+const RATE_LIMIT_MIN_DELAY_MS = 800;
+
+/** 限流自适应：延迟上限（毫秒）— 连续 429 后最高拉长到此值 */
+const RATE_LIMIT_MAX_DELAY_MS = 10000;
+
+/** 预查阶段：估算偏低超过此倍数时标记 deviation 告警 */
+const DEVIATION_WARN_RATIO = 1.5;
+
+/** 二分拆分最大递归深度（避免无限递归） */
+const MAX_BISECTION_DEPTH = 3;
+
+/** 限流自适应状态（模块级单例，跨多次 planQueriesAsync 调用持久；export 供 UI 读取） */
+export const rateLimitState = {
+    consecutive429: 0,   // 连续 429 次数
+    total429: 0,         // 累计 429 次数
+    totalCalls: 0,       // 累计调用次数
+    currentDelayMs: 1500 // 当前动态延迟
+};
+
+/**
+ * 记录一次 API 调用的限流结果，动态调整下次调用的延迟
+ * - 收到 429 → consecutive429++，currentDelayMs × 1.5（上限 10s）
+ * - 成功 → consecutive429=0；每 5 次连续成功 currentDelayMs × 0.8（下限 800ms）
+ * @param {boolean} was429 - 是否触发了限流
+ */
+function recordRateLimitOutcome(was429) {
+    rateLimitState.totalCalls++;
+    if (was429) {
+        rateLimitState.consecutive429++;
+        rateLimitState.total429++;
+        rateLimitState.currentDelayMs = Math.min(
+            RATE_LIMIT_MAX_DELAY_MS,
+            Math.round(rateLimitState.currentDelayMs * 1.5)
+        );
+    } else {
+        rateLimitState.consecutive429 = 0;
+        if (rateLimitState.totalCalls % 5 === 0) {
+            rateLimitState.currentDelayMs = Math.max(
+                RATE_LIMIT_MIN_DELAY_MS,
+                Math.round(rateLimitState.currentDelayMs * 0.8)
+            );
+        }
+    }
+}
+
+/**
+ * 重置限流自适应状态到初始值
+ *
+ * 用于「开始分析」入口（startSmartDownload）做会话级重置：
+ * 用户上次会话的 429 历史不应让本次新查询付出过长的延迟。
+ * 跨多次 planQueriesAsync 调用持久的是同一会话内的累积；新会话应清零。
+ *
+ * 注意：total429/totalCalls 是诊断指标，重置后丢失历史；如有需要可改为只重置 currentDelayMs。
+ */
+export function resetRateLimitState() {
+    rateLimitState.consecutive429 = 0;
+    rateLimitState.total429 = 0;
+    rateLimitState.totalCalls = 0;
+    rateLimitState.currentDelayMs = 1500;
+}
+
+/** 检测响应是否为 FOFA 限流错误（errmsg 或 HTTP 状态） */
+function isRateLimitError(errmsg, httpStatus) {
+    if (httpStatus === 429) return true;
+    if (!errmsg) return false;
+    return errmsg.includes('45012') || errmsg.includes('请求速度过快');
+}
+
+/**
+ * 预查专用 fetchSearchSize 包装：带限流自适应延迟 + 限流重试
+ *
+ * - 调用前 sleep(rateLimitState.currentDelayMs)
+ * - 收到 429 → 指数退避重试（复用 rateLimitState.currentDelayMs，最多 PROBE_MAX_RETRIES 次）
+ * - 成功 → 返回结果；彻底失败 → 返回 null
+ *
+ * @param {string} query
+ * @returns {Promise<{size, error, errmsg, consumedFpoint}|null>}
+ */
+async function fetchSearchSizeForProbe(query) {
+    await sleep(rateLimitState.currentDelayMs);
+
+    for (let attempt = 1; attempt <= PROBE_MAX_RETRIES; attempt++) {
+        try {
+            const result = await fetchSearchSize(query);
+            incrementApiCalls();
+
+            if (result.error && isRateLimitError(result.errmsg)) {
+                recordRateLimitOutcome(true);
+                if (attempt < PROBE_MAX_RETRIES) {
+                    logWarn('smartdl', '预查触发限流，退避重试', {
+                        query, errmsg: result.errmsg, attempt,
+                        nextDelay: rateLimitState.currentDelayMs
+                    });
+                    await sleep(rateLimitState.currentDelayMs);
+                    continue;
+                }
+                logWarn('smartdl', '预查限流重试耗尽', { query, errmsg: result.errmsg, attempts: attempt });
+                return null;
+            }
+
+            recordRateLimitOutcome(false);
+            if (attempt > 1) {
+                logInfo('smartdl', '预查重试成功', { query, attempt });
+            }
+            return result;
+        } catch (e) {
+            recordRateLimitOutcome(true);
+            if (attempt < PROBE_MAX_RETRIES) {
+                logWarn('smartdl', '预查网络异常，退避重试', {
+                    query, error: e.message || String(e), attempt,
+                    nextDelay: rateLimitState.currentDelayMs
+                });
+                await sleep(rateLimitState.currentDelayMs);
+                continue;
+            }
+            logError('smartdl', '预查异常重试耗尽', { query, error: e.message || String(e), attempts: attempt });
+            return null;
+        }
+    }
+    return null;
+}
 
 /** 检测 FOFA 限流错误（errmsg 或 HTTP status）*/
 function isRateLimited(errmsg, httpStatus) {
@@ -464,9 +589,9 @@ function cartesianSplit(probeStep, stats, freeLimit) {
     const probeSize = probeStep.estimatedSize;
     if (!probeSize || probeSize <= freeLimit) return null;
 
-    // 从 query 解析已使用的字段
+    // 从 query 解析已使用的字段（支持 =、!=、== 三种条件）
     const usedFields = new Set();
-    const fieldPattern = /(\w+)\s*=/g;
+    const fieldPattern = /(\w+)\s*(?:!=|==|=)/g;
     let m;
     while ((m = fieldPattern.exec(probeStep.query)) !== null) {
         usedFields.add(m[1]);
@@ -609,7 +734,7 @@ function cartesianRecursive(query, estSize, candidates, depth, freeLimit, outSte
  */
 async function fetchStatsForProbe(query, isFirstCall = false) {
     if (!isFirstCall) {
-        await sleep(PROBE_DELAY_MS);
+        await sleep(rateLimitState.currentDelayMs);
     }
 
     for (let attempt = 1; attempt <= PROBE_MAX_RETRIES; attempt++) {
@@ -620,6 +745,7 @@ async function fetchStatsForProbe(query, isFirstCall = false) {
             if (result.error) {
                 // FOFA 业务错误：区分限流 vs 其他
                 if (isRateLimited(result.errmsg)) {
+                    recordRateLimitOutcome(true);
                     if (attempt < PROBE_MAX_RETRIES) {
                         const backoffMs = attempt * PROBE_DELAY_MS; // attempt=1 → 1.5s, attempt=2 → 3s
                         logWarn('smartdl', `探测触发 FOFA 限流，退避重试`, {
@@ -648,6 +774,7 @@ async function fetchStatsForProbe(query, isFirstCall = false) {
             if (attempt > 1) {
                 logInfo('smartdl', '探测 fetchStats 重试成功', { query, attempt });
             }
+            recordRateLimitOutcome(false);
             return result;
         } catch (e) {
             // 网络异常/超时：不区分原因，统一按指数退避重试
@@ -666,6 +793,223 @@ async function fetchStatsForProbe(query, isFirstCall = false) {
         }
     }
     return null;
+}
+
+/**
+ * 二分拆分超限步骤：用笛卡尔积下一个未用维度切分
+ *
+ * 策略：从 step.query 解析已用字段，选一个未用、桶数≥2、top 桶占比<90% 的维度，
+ * 按 top-5 桶切分。每个子桶递归预查，仍超限则继续用下一个维度切。
+ * 最后用 != 兜底"其他"部分。
+ *
+ * @param {Object} step - 待拆分步骤（query + estimatedSize + description）
+ * @param {number} realSize - 真实匹配数（来自预查）
+ * @param {number} maxsize - 单次查询上限（getMaxSize()）
+ * @param {Object} originalStats - analyzeDimensions 返回的原始 stats
+ * @param {number} depth - 当前递归深度（0=顶层）
+ * @returns {Promise<Array|null>} 拆分后的步骤数组；无法拆分时返回 null
+ */
+async function bisectOverLimitStep(step, realSize, maxsize, originalStats, depth) {
+    if (depth >= MAX_BISECTION_DEPTH) {
+        logWarn('smartdl', '二分拆分达到深度上限', { query: step.query, realSize, depth });
+        return null;
+    }
+
+    // 从 query 解析已用字段（支持 =、!=、== 三种条件）
+    const usedFields = new Set();
+    const fieldPattern = /(\w+)\s*(?:!=|==|=)/g;
+    let m;
+    while ((m = fieldPattern.exec(step.query)) !== null) {
+        usedFields.add(m[1]);
+    }
+
+    // 候选维度：未用、桶数≥2、top 桶占比<90%（避免再选单桶占 90%+ 的）
+    const candidates = PLANNABLE_FIELDS
+        .filter(f => !usedFields.has(f))
+        .map(f => {
+            const buckets = originalStats.aggs?.[f] || [];
+            const topRatio = buckets.length > 0
+                ? Math.max(...buckets.map(b => b.count / originalStats.size))
+                : 1;
+            return { field: f, buckets, topRatio };
+        })
+        .filter(c => c.buckets.length >= 2 && c.topRatio < 0.9)
+        .sort((a, b) => a.topRatio - b.topRatio);
+
+    if (candidates.length === 0) {
+        logWarn('smartdl', '二分拆分无可用维度', {
+            query: step.query, usedFields: [...usedFields]
+        });
+        return null;
+    }
+
+    const nextDim = candidates[0];
+    const subSteps = [];
+    const usedValues = [];
+
+    for (const bucket of nextDim.buckets) {
+        const subQuery = buildQuery(step.query, [
+            { field: nextDim.field, op: '=', values: [bucket.name] }
+        ]);
+
+        const subProbe = await fetchSearchSizeForProbe(subQuery);
+        if (!subProbe || subProbe.error || !subProbe.size) {
+            // 子桶预查失败，跳过（由 != 兜底覆盖）
+            continue;
+        }
+
+        const subStep = {
+            id: 0, // reassignStepIds 会重排
+            query: subQuery,
+            estimatedSize: subProbe.size,
+            realSize: subProbe.size,
+            description: `${step.description} & ${nextDim.field}=${bucket.name} (预查 ${subProbe.size.toLocaleString()})`,
+            status: 'pending'
+        };
+
+        if (subProbe.size > maxsize) {
+            // 子桶仍超限，递归拆分
+            const deeper = await bisectOverLimitStep(
+                subStep, subProbe.size, maxsize, originalStats, depth + 1
+            );
+            if (deeper && deeper.length > 0) {
+                subSteps.push(...deeper);
+            } else {
+                // 递归也拆不动，标记 overLimit（执行时会触发 F 点检查）
+                subStep.overLimit = true;
+                subStep.description += ' ⚠ 仍超限';
+                subSteps.push(subStep);
+            }
+        } else {
+            subSteps.push(subStep);
+        }
+        usedValues.push(bucket.name);
+    }
+
+    // "其他" 兜底
+    if (usedValues.length > 0) {
+        const otherQuery = buildQuery(step.query, [
+            { field: nextDim.field, op: '!=', values: usedValues }
+        ]);
+        const otherProbe = await fetchSearchSizeForProbe(otherQuery);
+        if (otherProbe && !otherProbe.error && otherProbe.size > 0) {
+            if (otherProbe.size <= maxsize) {
+                subSteps.push({
+                    id: 0,
+                    query: otherQuery,
+                    estimatedSize: otherProbe.size,
+                    realSize: otherProbe.size,
+                    description: `${step.description} & 其他${nextDim.field} (预查 ${otherProbe.size.toLocaleString()})`,
+                    status: 'pending'
+                });
+            } else {
+                // "其他"也超限，递归拆分
+                const otherStep = {
+                    id: 0, query: otherQuery, estimatedSize: otherProbe.size,
+                    description: `${step.description} & 其他${nextDim.field}`, status: 'pending'
+                };
+                const deeper = await bisectOverLimitStep(
+                    otherStep, otherProbe.size, maxsize, originalStats, depth + 1
+                );
+                if (deeper && deeper.length > 0) {
+                    subSteps.push(...deeper);
+                } else {
+                    otherStep.overLimit = true;
+                    subSteps.push(otherStep);
+                }
+            }
+        }
+    }
+
+    if (subSteps.length === 0) return null;
+    reassignStepIds(subSteps);
+    return subSteps;
+}
+
+/**
+ * 预查所有步骤的真实匹配数，超限的步骤二分拆分
+ *
+ * 流程：
+ * 1. 对每个 step 调用 fetchSearchSizeForProbe 拿 realSize
+ * 2. realSize > maxsize → bisectOverLimitStep 二分拆分
+ * 3. 估算偏低（realSize > estimatedSize × DEVIATION_WARN_RATIO）→ 标记 deviation
+ * 4. 预查失败 → 保留原步骤 + prefetchFailed 标记
+ *
+ * @param {Array<Object>} steps - planQueriesAsync 返回的步骤数组
+ * @param {number} maxsize - 账户单次查询上限（getMaxSize()）
+ * @param {Object} originalStats - 原始 analyzeDimensions 返回的 stats
+ * @param {Function} [onProgress] - 进度回调 ({ checked, total, deviations, splits }) => void
+ * @returns {Promise<Array<Object>>} 预查后的步骤数组（可能比输入长）
+ */
+export async function prefetchStepSizes(steps, maxsize, originalStats, onProgress) {
+    const result = [];
+    let deviations = 0;
+    let splits = 0;
+    let failed = 0;
+    const total = steps.length;
+
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const checked = i + 1;
+
+        const probeResult = await fetchSearchSizeForProbe(step.query);
+
+        if (!probeResult || probeResult.error || !probeResult.size) {
+            // 预查失败：保留原步骤 + 标记
+            step.prefetchFailed = true;
+            step.description = `${step.description} ⚠ 预查失败`;
+            result.push(step);
+            failed++;
+        } else {
+            const realSize = probeResult.size;
+            step.realSize = realSize;
+
+            // 偏差检测（仅在 estimatedSize 存在且 > 0 时）
+            if (step.estimatedSize > 0) {
+                const ratio = realSize / step.estimatedSize;
+                if (ratio > DEVIATION_WARN_RATIO) {
+                    step.deviation = ratio;
+                    deviations++;
+                }
+            }
+
+            if (realSize > maxsize) {
+                // 超限 → 二分拆分
+                logInfo('smartdl', `步骤 #${step.id} 真实超限 (${realSize.toLocaleString()} > ${maxsize})，二分拆分`, {
+                    query: step.query
+                });
+                const subSteps = await bisectOverLimitStep(
+                    step, realSize, maxsize, originalStats, 0
+                );
+                if (subSteps && subSteps.length > 0) {
+                    result.push(...subSteps);
+                    splits++;
+                } else {
+                    // 二分失败，保留原步骤标记超限
+                    step.overLimit = true;
+                    step.description = `${step.description} ⚠ 真实超限 ${realSize.toLocaleString()}，二分失败`;
+                    result.push(step);
+                }
+            } else {
+                // 正常：用 realSize 覆盖 estimatedSize
+                step.estimatedSize = realSize;
+                result.push(step);
+            }
+        }
+
+        if (onProgress) {
+            onProgress({ checked, total, deviations, splits, failed });
+        }
+    }
+
+    reassignStepIds(result);
+
+    logInfo('smartdl', '预查阶段完成', {
+        total, deviations, splits, failed,
+        outputSteps: result.length
+    });
+
+    return result;
 }
 
 /**
@@ -970,6 +1314,43 @@ function sleep(ms) {
 }
 
 /**
+ * F 点消耗授权弹窗（默认聚焦取消按钮，防误点）
+ * @param {Object} step - 当前步骤
+ * @param {number} consumed - 本次消耗的 F 点数
+ * @returns {Promise<boolean>} true=允许继续，false=取消下载
+ */
+async function showFPointAuthorizeDialog(step, consumed) {
+    const remaining = await getRemainingFPoint();
+    const remainingStr = remaining != null ? remaining.toLocaleString() : '(未知)';
+    return await showConfirm({
+        title: '⚠ 检测到 F 点消耗',
+        message: `步骤 #${step.id} 执行消耗了 <strong style="color: var(--error);">${consumed}</strong> F 点。\n` +
+                 `当前余额：<strong>${remainingStr}</strong> F 点。\n\n` +
+                 `这通常意味着 FOFA 数据在预查后更新了，实际匹配数超出预估。\n` +
+                 `继续？后续步骤可能继续消耗 F 点。`,
+        confirmText: '允许本次',
+        cancelText: '取消下载',
+        defaultFocus: 'cancel'  // 默认聚焦取消，防误点
+    });
+}
+
+/**
+ * 查询当前账户剩余 F 点（用于 F 点授权弹窗显示）
+ * @returns {Promise<number|null>}
+ */
+async function getRemainingFPoint() {
+    try {
+        // 复用既有 fetchAccountInfo
+        const { fetchAccountInfo } = await import('./api.js');
+        const info = await fetchAccountInfo();
+        return info?.fofa_point ?? null;
+    } catch (e) {
+        logWarn('smartdl', '查询 F 点余额失败', { error: e.message || String(e) });
+        return null;
+    }
+}
+
+/**
  * 执行单个步骤（带重试和超时）
  * @param {Object} step - 计划步骤
  * @param {string} selectedFields - 字段列表
@@ -978,8 +1359,9 @@ function sleep(ms) {
  * @param {Array} allResults - 结果收集数组
  * @param {number} stepIndex - 当前步骤索引（用于日志）
  * @param {number} totalSteps - 总步骤数
+ * @param {Object} sessionState - 本次执行会话状态（含 fpointAuthorized 标志）
  */
-async function executeStep(step, selectedFields, freeLimit, onProgress, allResults, stepIndex, totalSteps) {
+async function executeStep(step, selectedFields, freeLimit, onProgress, allResults, stepIndex, totalSteps, sessionState) {
     let lastError = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -988,13 +1370,30 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
         if (onProgress) onProgress();
 
         try {
-            // 始终请求 freeLimit：估算值可能偏低导致丢数据，
-            // 而 FOFA 在数据不足时只返回实际数量，不会报错
+            // 关键改动：size 用 step.realSize（预查精确值），不是 freeLimit
+            // - realSize 保证 ≤ maxsize，避免翻页扣 F 点
+            // - 没有 realSize（预查失败）时降级用 freeLimit
+            const requestSize = (step.realSize && step.realSize > 0)
+                ? Math.min(step.realSize, freeLimit)
+                : freeLimit;
+
             const result = await fetchSearchResults(
-                step.query, 1, freeLimit, selectedFields,
+                step.query, 1, requestSize, selectedFields,
                 false, REQUEST_TIMEOUT_MS
             );
             incrementApiCalls();
+
+            // F 点红线检查：consumed_fpoint > 0 弹窗用户授权（默认拒绝）
+            if (result.consumed_fpoint > 0 && !sessionState.fpointAuthorized) {
+                const approved = await showFPointAuthorizeDialog(step, result.consumed_fpoint);
+                if (!approved) {
+                    // 用户拒绝：抛特殊错误让 executePlan 停止
+                    const err = new Error('FPOINT_UNAUTHORIZED');
+                    err.code = 'FPOINT_UNAUTHORIZED';
+                    throw err;
+                }
+                sessionState.fpointAuthorized = true;
+            }
 
             if (result.error) {
                 // 解析详细的错误信息
@@ -1027,6 +1426,10 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
                 return;
             }
         } catch (err) {
+            // F 点授权被用户拒绝：直接抛出，不被重试逻辑吞掉，让 executePlan 优雅停止
+            if (err.code === 'FPOINT_UNAUTHORIZED') {
+                throw err;
+            }
             lastError = err.name === 'AbortError'
                 ? `请求超时 (${REQUEST_TIMEOUT_MS / 1000}s)`
                 : (err.message || '网络错误');
@@ -1059,6 +1462,9 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
 export async function executePlan(baseQuery, planSteps, selectedFields, onProgress) {
     const freeLimit = getFreeLimit();
 
+    // F 点授权会话状态（本次执行内有效）
+    const sessionState = { fpointAuthorized: false };
+
     logInfo('smartdl', '开始执行查询计划', { baseQuery, totalSteps: planSteps.length, pendingSteps: planSteps.filter(s => s.status === 'pending').length, freeLimit, selectedFields });
 
     // 确保 selectedFields 包含 dedup key
@@ -1081,7 +1487,23 @@ export async function executePlan(baseQuery, planSteps, selectedFields, onProgre
             await sleep(STEP_DELAY_MS);
         }
 
-        await executeStep(step, selectedFields, freeLimit, () => onProgress(planSteps), allResults, i, totalSteps);
+        try {
+            await executeStep(step, selectedFields, freeLimit, () => onProgress(planSteps), allResults, i, totalSteps, sessionState);
+        } catch (e) {
+            if (e.code === 'FPOINT_UNAUTHORIZED') {
+                logWarn('smartdl', '用户拒绝 F 点授权，中止执行', { stepIndex: i, totalSteps });
+                // 触发步骤标记为 error（避免停留在 running）
+                step.status = 'error';
+                step.errorMsg = '用户拒绝 F 点授权';
+                // 标记剩余步骤为 skipped
+                for (let j = i + 1; j < pendingSteps.length; j++) {
+                    pendingSteps[j].status = 'skipped';
+                    pendingSteps[j].errorMsg = '用户拒绝 F 点授权，已跳过';
+                }
+                break;
+            }
+            throw e;
+        }
 
         // 实时回调
         onProgress(planSteps);

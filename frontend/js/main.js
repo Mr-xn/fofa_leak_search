@@ -20,7 +20,7 @@ import { toggleStats, refreshStats, updateStatsButtonState, downloadStatsScreens
 import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, renameCustomTag } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter, applyIconHashToQuery } from './icon-hash.js';
-import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, planQueriesAsync, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
+import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, planQueriesAsync, prefetchStepSizes, rateLimitState, resetRateLimitState, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
 import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
 import { getSelectedFields } from './ui.js';
 import { setLoggingEnabled, setLogLevel, info as logInfo, warn as logWarn, error as logError } from './logger.js';
@@ -142,6 +142,9 @@ window.openSmartDownload = () => {
     document.getElementById('smartPhasePlan').style.display = 'none';
     document.getElementById('smartPlanGrid').innerHTML = '';
     document.getElementById('smartPlanBadge').textContent = '';
+    document.getElementById('smartPhasePrefetch').style.display = 'none';
+    document.getElementById('smartPrefetchBadge').textContent = '';
+    document.getElementById('smartPrefetchInfo').style.display = 'none';
     document.getElementById('smartPhaseExecute').style.display = 'none';
     document.getElementById('smartResultSummary').style.display = 'none';
     document.getElementById('smartStartBtn').style.display = '';
@@ -150,7 +153,8 @@ window.openSmartDownload = () => {
 
     setPhaseIcon('smartPhaseAnalyzeIcon', 'pending', '1');
     setPhaseIcon('smartPhasePlanIcon', 'pending', '2');
-    setPhaseIcon('smartPhaseExecuteIcon', 'pending', '3');
+    setPhaseIcon('smartPhasePrefetchIcon', 'pending', '3');
+    setPhaseIcon('smartPhaseExecuteIcon', 'pending', '4');
 };
 
 window.closeSmartDownload = () => {
@@ -161,6 +165,9 @@ window.startSmartDownload = async () => {
     const startBtn = document.getElementById('smartStartBtn');
     startBtn.disabled = true;
     startBtn.textContent = '分析中...';
+
+    // 会话级重置：避免上次会话累积的 429 历史让本次新查询付出过长延迟
+    resetRateLimitState();
 
     const freeLimit = getFreeLimit();
     // 暴露给 renderPlanSteps 判断步骤是否超限
@@ -273,37 +280,76 @@ window.startSmartDownload = async () => {
     smartPlanSteps = planResult.steps;
     renderPlanSteps();
 
-    // 更新方案数量徽标（含探测次数提示）
-    const planCount = smartPlanSteps.length;
-    const planTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
-    const probeFailedCount = smartPlanSteps.filter(s => s.probeFailed).length;
-    const estimatedCount = smartPlanSteps.filter(s => s.estimated).length;
-    const probeHint = planResult.probeCount > 0 ? ` · 探测 ${planResult.probeCount} 次` : '';
-    // 覆盖率基于 planResult.coveredSize（已排除 probeFailed 步骤）
-    const confirmedCover = planResult.coveredSize || 0;
-    const coveragePct = planResult.targetSize > 0
-        ? Math.min(100, Math.round(confirmedCover / planResult.targetSize * 100))
-        : 100;
-    const failedHint = probeFailedCount > 0 ? ` · ⚠ ${probeFailedCount} 步探测失败` : '';
-    // 笛卡尔积估算步骤提示（让用户知道这部分覆盖量是估算的）
-    const estimatedHint = estimatedCount > 0 ? ` · ${estimatedCount} 步估算` : '';
-    document.getElementById('smartPlanBadge').textContent =
-        `${planCount} 步 · ${confirmedCover.toLocaleString()}/${planResult.targetSize.toLocaleString()} 条${probeHint}${estimatedHint} · 覆盖 ${coveragePct}%${failedHint}`;
-    // 探测失败时禁用执行按钮，避免误操作下载超限数据
-    const execBtn = document.getElementById('smartExecuteBtn');
-    if (probeFailedCount > 0) {
-        execBtn.disabled = true;
-        execBtn.textContent = '探测失败，请查日志';
-        execBtn.title = `${probeFailedCount} 个步骤探测失败，执行会触发 FOFA 单次限制。请查看诊断日志确认失败原因`;
-    } else {
-        execBtn.disabled = false;
-        execBtn.textContent = '执行下载';
-        execBtn.title = estimatedCount > 0
-            ? `${estimatedCount} 个步骤为估算切分（笛卡尔积降级），实际数据量可能有 ±10% 偏差，executeStep 会请求 freeLimit 兜底`
-            : '';
+    // 更新方案数量徽标（含探测次数提示）—— 规划阶段的瞬时展示，预查完成后会被覆盖
+    {
+        const planCount = smartPlanSteps.length;
+        const planProbeFailed = smartPlanSteps.filter(s => s.probeFailed).length;
+        const estimatedCount = smartPlanSteps.filter(s => s.estimated).length;
+        const probeHint = planResult.probeCount > 0 ? ` · 探测 ${planResult.probeCount} 次` : '';
+        // 覆盖率基于 planResult.coveredSize（已排除 probeFailed 步骤）
+        const confirmedCover = planResult.coveredSize || 0;
+        const coveragePct = planResult.targetSize > 0
+            ? Math.min(100, Math.round(confirmedCover / planResult.targetSize * 100))
+            : 100;
+        const planFailedHint = planProbeFailed > 0 ? ` · ⚠ ${planProbeFailed} 步探测失败` : '';
+        // 笛卡尔积估算步骤提示（让用户知道这部分覆盖量是估算的）
+        const estimatedHint = estimatedCount > 0 ? ` · ${estimatedCount} 步估算` : '';
+        document.getElementById('smartPlanBadge').textContent =
+            `${planCount} 步 · ${confirmedCover.toLocaleString()}/${planResult.targetSize.toLocaleString()} 条${probeHint}${estimatedHint} · 覆盖 ${coveragePct}%${planFailedHint}`;
     }
 
     setPhaseIcon('smartPhasePlanIcon', 'done', '✓');
+
+    // ===== Phase 3: 预查校验 =====
+    setPhaseIcon('smartPhasePrefetchIcon', 'running', '⟳');
+    document.getElementById('smartPhasePrefetch').style.display = '';
+    document.getElementById('smartPrefetchInfo').style.display = '';
+    document.getElementById('smartPrefetchInfo').innerHTML = '正在预查每步真实总数...';
+
+    // 获取 maxsize（FOFA 单次查询上限）
+    const maxsize = getMaxSizeForSmart();
+    document.getElementById('smartPrefetchBadge').textContent = `延迟 ${(rateLimitState.currentDelayMs / 1000).toFixed(1)}s`;
+
+    smartPlanSteps = await prefetchStepSizes(
+        smartPlanSteps,
+        maxsize,
+        stats,
+        (info) => {
+            document.getElementById('smartPrefetchBadge').textContent =
+                `预查 ${info.checked}/${info.total} · 偏差 ${info.deviations} · 拆分 ${info.splits}${info.failed ? ` · 失败 ${info.failed}` : ''}`;
+        }
+    );
+    renderPlanSteps();
+
+    setPhaseIcon('smartPhasePrefetchIcon', 'done', '✓');
+
+    // 更新徽标（预查后基于真实值）
+    const finalCount = smartPlanSteps.length;
+    const finalTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
+    const probeFailedCount = smartPlanSteps.filter(s => s.probeFailed || s.prefetchFailed).length;
+    const overLimitCount = smartPlanSteps.filter(s => s.overLimit).length;
+    const deviationCount = smartPlanSteps.filter(s => s.deviation).length;
+    const prefetchHint = ` · 预查 ${smartPlanSteps.filter(s => s.realSize).length}/${finalCount}`;
+    const deviationHint = deviationCount > 0 ? ` · ⚠ ${deviationCount} 步估算偏低` : '';
+    const overLimitHint = overLimitCount > 0 ? ` · ⚠ ${overLimitCount} 步超限` : '';
+    const failedHint = probeFailedCount > 0 ? ` · ⚠ ${probeFailedCount} 步失败` : '';
+    document.getElementById('smartPlanBadge').textContent =
+        `${finalCount} 步 · ${finalTotal.toLocaleString()} 条${prefetchHint}${deviationHint}${overLimitHint}${failedHint}`;
+
+    // 超限或预查失败时禁用执行按钮
+    const execBtn = document.getElementById('smartExecuteBtn');
+    if (overLimitCount > 0 || probeFailedCount > 0) {
+        execBtn.disabled = true;
+        execBtn.textContent = '存在超限/失败步骤';
+        execBtn.title = `${overLimitCount + probeFailedCount} 个步骤有问题，执行会触发 FOFA 限制或扣 F 点。请查看诊断日志`;
+    } else {
+        execBtn.disabled = false;
+        execBtn.textContent = '执行下载';
+        execBtn.title = deviationCount > 0
+            ? `${deviationCount} 个步骤估算偏低，已用预查真实值替代`
+            : '';
+    }
+
     document.getElementById('smartExecuteBtn').style.display = '';
 
     startBtn.disabled = false;
@@ -316,7 +362,7 @@ window.executeSmartDownload = async () => {
     execBtn.textContent = '下载中...';
     document.getElementById('smartStartBtn').disabled = true;
 
-    // Phase 3: 执行
+    // Phase 4: 执行
     setPhaseIcon('smartPhaseExecuteIcon', 'running', '⟳');
     document.getElementById('smartPhaseExecute').style.display = '';
     document.getElementById('smartPhaseExecute').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -409,28 +455,51 @@ function setPhaseIcon(id, status, text) {
     el.textContent = text;
 }
 
+/**
+ * 获取 FOFA 单次查询上限（maxsize），用于预查阶段判断超限
+ * 与 results.js 的 getMaxSize 逻辑一致，但避免循环依赖
+ * @returns {number}
+ */
+function getMaxSizeForSmart() {
+    const info = state.userInfo;
+    if (info?.maxsize > 0) return info.maxsize;
+    return info?.isvip ? 10000 : 100;
+}
+
 function renderPlanSteps() {
     const grid = document.getElementById('smartPlanGrid');
     if (!grid) return;
 
     grid.innerHTML = smartPlanSteps.map(step => {
-        // probeFailed 步骤视觉降级为 error 风格，但不改变真实 status（保留 pending 语义）
-        const visualStatus = step.probeFailed ? 'error' : step.status;
+        // probeFailed / skipped 步骤视觉降级为 error 风格，但不改变真实 status（保留 pending/skipped 语义）
+        const visualStatus = (step.probeFailed || step.status === 'skipped') ? 'error' : step.status;
         const statusClass = `step-${visualStatus}`;
-        const iconMap = { pending: '○', running: '⟳', done: '✓', error: '⚠' };
+        const iconMap = { pending: '○', running: '⟳', done: '✓', error: '⚠', skipped: '⊘' };
         const iconClass = `phase-${visualStatus}`;
         const retryInfo = step.retryCount > 1 ? ` <span style="color:var(--warning);font-size:10px;">重试${step.retryCount}/${MAX_RETRIES}</span>` : '';
-        const errorInfo = step.status === 'error' && step.errorMsg ? `<div class="step-error-msg">${escapeHtml(step.errorMsg)}</div>` : '';
+        const errorInfo = (step.status === 'error' || step.status === 'skipped') && step.errorMsg ? `<div class="step-error-msg">${escapeHtml(step.errorMsg)}</div>` : '';
         const resultInfo = step.status === 'done' && step.results ? ` <span style="color:var(--success);font-size:10px;">(${step.results.length}条)</span>` : '';
         // 估算步骤（笛卡尔积降级产物）显示灰色标记，让用户知道这是估算值
         const estimatedTag = step.estimated ? ` <span style="color:var(--text-muted);font-size:10px;">[估算]</span>` : '';
+        const realSizeTag = step.realSize && step.realSize !== step.estimatedSize
+            ? ` <span style="color:var(--info);font-size:10px;">(真实 ${step.realSize.toLocaleString()})</span>`
+            : '';
+        const deviationTag = step.deviation
+            ? ` <span style="color:var(--warning);font-size:10px;">⚠ 估算偏低 ×${step.deviation.toFixed(1)}</span>`
+            : '';
+        const overLimitTag = step.overLimit
+            ? ` <span style="color:var(--error);font-size:10px;">⚠ 超限</span>`
+            : '';
+        const prefetchFailedTag = step.prefetchFailed
+            ? ` <span style="color:var(--error);font-size:10px;">⚠ 预查失败</span>`
+            : '';
         const overLimitHint = step.estimatedSize > (window.__smartFreeLimit || 10000) && step.probeFailed
             ? ` <span style="color:var(--error);font-size:10px;">(超限 ${step.estimatedSize.toLocaleString()} 条)</span>` : '';
         return `
             <div class="smart-plan-item ${statusClass}">
                 <span class="step-status-icon ${iconClass}">${iconMap[visualStatus]}</span>
                 <div class="step-content">
-                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}${estimatedTag}${overLimitHint}</div>
+                    <div class="step-desc">${escapeHtml(step.description)}${retryInfo}${resultInfo}${estimatedTag}${realSizeTag}${deviationTag}${overLimitTag}${prefetchFailedTag}${overLimitHint}</div>
                     <div class="step-query" title="${escapeHtml(step.query)}">${escapeHtml(step.query)}</div>
                     ${errorInfo}
                 </div>

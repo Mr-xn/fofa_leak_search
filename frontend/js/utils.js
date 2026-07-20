@@ -15,23 +15,58 @@ export function showToast(message, type = 'info') {
 // ==================== 确认弹窗 ====================
 /**
  * 显示自定义确认弹窗（替代 window.confirm，跨平台一致）
- * @param {string} message - 提示消息
- * @returns {Promise<boolean>} 用户点击"继续"返回 true，"取消"或关闭返回 false
+ * @param {string|{message: string, title?: string, confirmText?: string, cancelText?: string, defaultFocus?: 'ok'|'cancel'}} messageOrOpts
+ * @returns {Promise<boolean>} 用户点击"继续/允许"返回 true，"取消"或关闭返回 false
  */
-export function showConfirm(message) {
+export function showConfirm(messageOrOpts) {
+    const opts = typeof messageOrOpts === 'string'
+        ? { message: messageOrOpts }
+        : messageOrOpts;
+
     return new Promise((resolve) => {
-        document.getElementById('confirmMessage').textContent = message;
+        const titleEl = document.getElementById('confirmTitle');
+        const msgEl = document.getElementById('confirmMessage');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
         const modal = document.getElementById('confirmModal');
+
+        // 标题（可选）
+        if (opts.title) {
+            titleEl.textContent = opts.title;
+            titleEl.style.display = '';
+        } else {
+            titleEl.textContent = '';
+            titleEl.style.display = 'none';
+        }
+
+        // 消息（支持 HTML，因为调用方可能传 <strong>）
+        msgEl.innerHTML = opts.message || '';
+
+        // 按钮文案
+        okBtn.textContent = opts.confirmText || '继续';
+        cancelBtn.textContent = opts.cancelText || '取消';
+
         modal.classList.add('show');
+
+        // 默认聚焦（F 点授权默认聚焦取消按钮，防误点）
+        const focusTarget = opts.defaultFocus === 'cancel' ? cancelBtn
+            : opts.defaultFocus === 'ok' ? okBtn
+            : null;
+        if (focusTarget) {
+            // setTimeout 确保 modal 显示后再 focus
+            setTimeout(() => focusTarget.focus(), 0);
+        }
 
         const cleanup = (result) => {
             modal.classList.remove('show');
+            okBtn.onclick = null;
+            cancelBtn.onclick = null;
+            modal.onclick = null;
             resolve(result);
         };
 
-        document.getElementById('confirmOkBtn').onclick = () => cleanup(true);
-        document.getElementById('confirmCancelBtn').onclick = () => cleanup(false);
-        // 点击遮罩层关闭
+        okBtn.onclick = () => cleanup(true);
+        cancelBtn.onclick = () => cleanup(false);
         modal.onclick = (e) => {
             if (e.target === modal) cleanup(false);
         };
