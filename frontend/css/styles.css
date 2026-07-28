@@ -1697,13 +1697,17 @@ body {
     /* tbody 内含多个 .ft-tr */
 }
 
-/* 行：flex 容器，width:max-content 让行按 cell 总宽撑开触发横向滚动；
-   min-width:100% 保证列少时不留空白。每行作为整体参与 hover/border。 */
+/* 行：flex 容器。width:100% + min-width:max-content 兼顾两种场景：
+   - 列少（Σ cell width < 容器宽）：width:100% 生效 → 行撑满容器，最后一列贴右边框，
+     且窗口缩放时行宽自动跟随父容器变化（响应式）。
+   - 列多（Σ cell width > 容器宽）：min-width:max-content 生效 → 行宽=内容总宽，
+     cell 不被压缩（flex-shrink:0），自然溢出祖父 .table-container 的 overflow-x:auto 出滚动条。
+   两条规则同时存在，浏览器取较大者，两种场景都正确。 */
 .ft-tr {
     display: flex;
     align-items: stretch;
-    width: max-content;
-    min-width: 100%;
+    width: 100%;
+    min-width: max-content;
     box-sizing: border-box;
 }
 .ft-tr:hover {
