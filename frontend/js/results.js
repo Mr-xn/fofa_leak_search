@@ -152,15 +152,33 @@ export function renderTable(fields) {
     const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
 
+    // colgroup：fixed-layout 下 <col> 是被浏览器最严格尊重的列宽来源（规范高于 th 内联 width）。
+    // 关键动机：WebKitGTK (Linux) 在 table-layout:fixed 下仍把 td 的 nowrap 内容算进列最小宽度，
+    // 导致 macOS 能拖窄、Ubuntu 拖不动；显式生成与 th 同源的 <col> 把"列宽地板"钉死，
+    // 让两个引擎都只认 col 指定的宽度，从而实现跨平台可拖窄。宽度值与下方 th 完全同源。
+    const colWidths = fields.map(field => columnWidths.get(field) || getColumnWidth(field, fields.length));
+    const table = document.querySelector('table');
+    let colgroup = table && table.querySelector(':scope > colgroup');
+    if (table && !colgroup) {
+        // index.html 的 <table> 默认无 colgroup；自动创建并插入为 table 第一个子节点（必须在 thead 之前）。
+        colgroup = document.createElement('colgroup');
+        table.insertBefore(colgroup, table.firstChild);
+    }
+    if (colgroup) {
+        colgroup.innerHTML = `
+            <col style="width: 50px;">${colWidths.map(w => `<col style="width: ${w};">`).join('')}
+        `;
+    }
+
     thead.innerHTML = `
         <tr>
             <th style="width: 50px; min-width: 50px; max-width: 50px;">
                 <span class="th-inner">#</span>
             </th>
             ${fields.map((field, index) => {
-                // 优先用用户拖动后的宽度；否则用字段默认宽度。
+                // 与上方 colgroup 同源；优先用用户拖动后的宽度，否则用字段默认宽度。
                 // 不设内联 min-width（CSS th { min-width: 80px } 已是 floor），否则拖窄会被阻止。
-                const colWidth = columnWidths.get(field) || getColumnWidth(field, fields.length);
+                const colWidth = colWidths[index];
                 // 尾列右边缘 = 表格右边框，不渲染拖拽手柄（与首列 # 一样无意义且视觉突兀）
                 const isLast = index === fields.length - 1;
                 const handle = isLast ? '' : `
