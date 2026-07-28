@@ -45,11 +45,17 @@ function handleResize(e) {
     if (!resizing) return;
 
     const diff = e.clientX - startX;
-    // table-layout: fixed 下，仅 th 的 width 决定整列宽度；
-    // 拖多少即显示多宽，超出部分由 td 的 overflow+ellipsis 隐藏。
+    // 拖多少即显示多宽，超出部分由 cell 的 overflow+ellipsis 隐藏。
+    // div+flex 架构：列宽写到 .ft-table 根节点的 CSS 变量 --col-<i>，
+    // 整列所有 cell（thead + tbody 每一行）通过 var(--col-<i>) 自动同步，
+    // 无需遍历每行 cell 设 width。col-0 是 # 索引列（固定 50px，不可拖）。
     const newWidth = Math.max(80, startWidth + diff);
-    resizing.style.width = `${newWidth}px`;
-    // 持久化到 Map：sortTable/renderTable 重新生成 thead 时仍能恢复用户拖动后的宽度。
+    const colIndex = resizing.dataset.col;
+    const table = resizing.closest('.ft-table');
+    if (table && colIndex) {
+        table.style.setProperty(`--col-${colIndex}`, `${newWidth}px`);
+    }
+    // 持久化到 Map：sortTable/renderTable 重新生成时仍能恢复用户拖动后的宽度。
     // 与 getColumnWidth 一致存带 px 的字符串，避免模板拼接出无单位的非法 CSS。
     const field = resizing.dataset.field;
     if (field) columnWidths.set(field, `${newWidth}px`);
@@ -152,69 +158,69 @@ export function renderTable(fields) {
     const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
 
-    // colgroup：fixed-layout 下 <col> 是被浏览器最严格尊重的列宽来源（规范高于 th 内联 width）。
-    // 关键动机：WebKitGTK (Linux) 在 table-layout:fixed 下仍把 td 的 nowrap 内容算进列最小宽度，
-    // 导致 macOS 能拖窄、Ubuntu 拖不动；显式生成与 th 同源的 <col> 把"列宽地板"钉死，
-    // 让两个引擎都只认 col 指定的宽度，从而实现跨平台可拖窄。宽度值与下方 th 完全同源。
+    // 列宽缓存：field → 'NNNpx'。优先用用户拖动后的宽度，否则用字段默认宽度。
+    // 统一一份来源，thead/tbody 的每个 cell 都从同一 CSS 变量读取，跨排序/分页/重搜保持一致。
     const colWidths = fields.map(field => columnWidths.get(field) || getColumnWidth(field, fields.length));
-    const table = document.querySelector('table');
-    let colgroup = table && table.querySelector(':scope > colgroup');
-    if (table && !colgroup) {
-        // index.html 的 <table> 默认无 colgroup；自动创建并插入为 table 第一个子节点（必须在 thead 之前）。
-        colgroup = document.createElement('colgroup');
-        table.insertBefore(colgroup, table.firstChild);
-    }
-    if (colgroup) {
-        colgroup.innerHTML = `
-            <col style="width: 50px;">${colWidths.map(w => `<col style="width: ${w};">`).join('')}
-        `;
+
+    // 把所有列宽写成 .ft-table 根节点的 CSS 变量 --col-<i>。
+    // 关键动机：原生 <table> 在 WebKitGTK (Linux) 上的列宽布局有缺陷（拖不动），
+    // 改用 div+flex 后，所有 cell 的 width 通过 var(--col-<i>) 引用根节点的同一变量。
+    // 拖动时只需改根节点一个 inline style，整列所有行的 cell 自动同步——
+    // 无需遍历每行 cell 设 width（O(行×列) 卡顿），也绕开了 table 布局引擎。
+    // 列号从 1 开始（# 索引列固定 50px 不走变量，占 col-0 位置但不读写变量）。
+    const tableRoot = document.querySelector('.ft-table');
+    if (tableRoot) {
+        fields.forEach((field, i) => {
+            tableRoot.style.setProperty(`--col-${i + 1}`, colWidths[i]);
+        });
     }
 
+    // 表头行：单个 .ft-tr 包含所有 .ft-th（保留 th 类名供测试与 CSS 命中）
     thead.innerHTML = `
-        <tr>
-            <th style="width: 50px; min-width: 50px; max-width: 50px;">
+        <div class="ft-tr" role="row">
+            <div class="th ft-th ft-col-0" style="width: 50px; min-width: 50px; max-width: 50px;">
                 <span class="th-inner">#</span>
-            </th>
+            </div>
             ${fields.map((field, index) => {
-                // 与上方 colgroup 同源；优先用用户拖动后的宽度，否则用字段默认宽度。
-                // 不设内联 min-width（CSS th { min-width: 80px } 已是 floor），否则拖窄会被阻止。
-                const colWidth = colWidths[index];
+                const colIndex = index + 1; // 列号从 1 开始（0 留给 # 列）
                 // 尾列右边缘 = 表格右边框，不渲染拖拽手柄（与首列 # 一样无意义且视觉突兀）
                 const isLast = index === fields.length - 1;
                 const handle = isLast ? '' : `
                     <div class="resize-handle" onmousedown="event.stopPropagation(); window.startColumnResize(event, this.parentElement)"></div>`;
                 return `
-                <th onclick="window.sortTable(${index})" data-field="${field}" style="cursor: pointer; width: ${colWidth};">
+                <div class="th ft-th ft-col-${colIndex}" onclick="window.sortTable(${index})" data-field="${field}" data-col="${colIndex}" style="cursor: pointer; width: var(--col-${colIndex});">
                     <span class="th-inner">
                         <span class="th-label">${FIELD_LABELS[field] || field} <span class="sort-icon" id="sort-${index}">↕</span></span>
                         <span class="copy-col-btn" onclick="event.stopPropagation(); window.copyColumn(${index})" title="复制此列">📋</span>
                     </span>${handle}
-                </th>
+                </div>
                 `;
             }).join('')}
-        </tr>
+        </div>
     `;
 
     const startIdx = (state.currentPage - 1) * parseInt(document.getElementById('pageSize').value);
+    // 每行一个 .ft-tr，每个 cell 是 .ft-td（保留 td 类名）+ .ft-col-<i>，width 引用同一 CSS 变量
     tbody.innerHTML = state.results.map((row, rowIndex) => `
-        <tr>
-            <td style="color: var(--text-secondary); font-size: 12px; width: 50px; min-width: 50px; max-width: 50px;">${startIdx + rowIndex + 1}</td>
+        <div class="ft-tr" role="row">
+            <div class="td ft-td ft-col-0" style="color: var(--text-secondary); font-size: 12px; width: 50px; min-width: 50px; max-width: 50px;">${startIdx + rowIndex + 1}</div>
             ${row.map((cell, cellIndex) => {
                 const field = fields[cellIndex];
+                const colIndex = cellIndex + 1;
                 const isIpv6 = isIPv6(cell);
-                const cellClasses = [];
+                const cellClasses = ['td', 'ft-td', `ft-col-${colIndex}`];
                 if (field === 'ip') cellClasses.push(isIpv6 ? 'ipv6-cell' : 'ip-cell');
                 if (field === 'link') cellClasses.push('link-cell');
                 const cellClass = cellClasses.join(' ');
                 const recoveredCell = field === 'link' ? recoverEllipsizedLink(cell, row, fields) : cell;
                 const displayValue = (field === 'ip' && isIpv6) ? formatIPv6(recoveredCell) : recoveredCell;
                 return `
-                    <td title="${escapeHtml(recoveredCell)}" class="${cellClass}">
+                    <div class="${cellClass}" title="${escapeHtml(recoveredCell)}" style="width: var(--col-${colIndex});">
                         ${formatCell(displayValue, field)}
-                    </td>
+                    </div>
                 `;
             }).join('')}
-        </tr>
+        </div>
     `).join('');
 
     // 初始化列宽拖动
