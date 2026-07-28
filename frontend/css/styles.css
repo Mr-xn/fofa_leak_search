@@ -1759,6 +1759,11 @@ td {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    /* min-width:0 是关键双保险——WebKitGTK (Linux) 在 table-layout:fixed 下仍把 td 的
+       nowrap 内容算进列最小宽度，导致"拖不动"。显式 min-width:0 让单元格贡献的
+       min-content 降为 0，配合上方 colgroup 的硬 <col> 宽度，两个引擎都能自由拖窄。
+       WKWebView/Blink 本就遵守规范，此行对它们无害。 */
+    min-width: 0;
     color: var(--text);
 }
 
