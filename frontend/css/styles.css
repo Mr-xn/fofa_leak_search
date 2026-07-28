@@ -1710,6 +1710,25 @@ body {
     min-width: max-content;
     box-sizing: border-box;
 }
+/* 弹性填充：吸收"列总宽 < 容器宽"时的剩余空间，让表格撑满容器右侧不留白。
+   旧 <table> 靠 table-layout:fixed 自动把剩余空间分给各列；div+flex 下 cell 宽度固定（CSS 变量），
+   不会自动拉伸，故需一个 flex:1 的空占位符吸收余量。列宽足够时该元素宽度为 0，无副作用。 */
+.ft-filler {
+    flex: 1 1 0;
+    min-width: 0;
+    box-sizing: border-box;
+}
+/* 表头填充需要与 .th 一致的背景和下边框，视觉上延续表头行 */
+.ft-thead .ft-filler {
+    border-bottom: 2px solid var(--border);
+}
+/* 数据行填充需要与 .td 一致的下边框，视觉上延续数据行 */
+.ft-tbody .ft-filler {
+    border-bottom: 1px solid var(--border-light);
+}
+.ft-tr:last-child .ft-filler {
+    border-bottom: none;
+}
 .ft-tr:hover {
     background: var(--primary-light);
 }
