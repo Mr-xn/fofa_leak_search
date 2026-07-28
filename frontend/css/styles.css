@@ -1671,24 +1671,61 @@ body {
     background: #cbd5e1;
 }
 
-table {
-    width: max-content;
-    min-width: 100%;
-    border-collapse: collapse;
+/* ==================== div+flex 模拟表格 ====================
+   背景：原生 <table> 在 WebKitGTK (Linux) 上的列宽布局有缺陷——table-layout:fixed 下
+   仍把 td 的 nowrap 内容算进列最小宽度，导致 macOS 能拖窄、Ubuntu 拖不动。已尝试
+   colgroup + td{min-width:0} 仍无效（WebKitGTK table 布局引擎根本不可靠）。
+   改用 div+flex：flexbox 引擎在 WebKitGTK 上成熟可靠（GNOME 桌面大量使用）。
+
+   列宽机制：所有 cell 的 width 引用 .ft-table 根节点的 CSS 变量 var(--col-<i>)。
+   拖动时只改根节点一个 inline style，整列所有行自动同步，无需遍历每行 cell。
+   # 索引列固定 50px（占 col-0 位置但不读写变量）。
+*/
+.ft-table {
+    /* 根节点：承载 --col-N CSS 变量；块级元素填满 table-container 宽度 */
     font-size: 13px;
-    /* fixed 布局：列宽严格由 th 的 width 决定，内容超出由 td 的 overflow+ellipsis 处理，
-       这样拖动列宽时“拖多少就显示多宽”，不会被单元格内容强行撑开。 */
-    table-layout: fixed;
 }
 
-thead {
+/* thead/tbody：块级容器。thead sticky 吸顶（沿用旧行为，滚动祖先不变） */
+.ft-thead {
     background: var(--bg);
     position: sticky;
     top: 0;
     z-index: 10;
 }
+.ft-tbody {
+    /* tbody 内含多个 .ft-tr */
+}
 
-th {
+/* 行：flex 容器，width:max-content 让行按 cell 总宽撑开触发横向滚动；
+   min-width:100% 保证列少时不留空白。每行作为整体参与 hover/border。 */
+.ft-tr {
+    display: flex;
+    align-items: stretch;
+    width: max-content;
+    min-width: 100%;
+    box-sizing: border-box;
+}
+.ft-tr:hover {
+    background: var(--primary-light);
+}
+.ft-tr:last-child .td {
+    border-bottom: none;
+}
+
+/* 单元格基类：th（表头）与 td（数据）共享。
+   flex-shrink:0 关键——不被 flex 压缩，列宽严格由 width(var(--col-i)) 决定；
+   overflow+ellipsis+nowrap 处理视觉截断，列宽足够时自然完整显示。 */
+.th, .td {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 表头单元格视觉样式（从旧 th 平移） */
+.th {
     padding: 10px 14px;
     text-align: left;
     font-weight: 600;
@@ -1698,89 +1735,78 @@ th {
     letter-spacing: 0.3px;
     cursor: pointer;
     user-select: none;
-    white-space: nowrap;
     border-bottom: 2px solid var(--border);
     transition: background 0.15s;
     position: relative;
     min-width: 80px;
 }
-th .th-inner {
+.th .th-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
 }
-th .th-label {
+.th .th-label {
     flex-shrink: 1;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-th:hover {
+.th:hover {
     background: var(--border-light);
     color: var(--text);
 }
 
-th .sort-icon {
+.th .sort-icon {
     margin-left: 4px;
     opacity: 0.4;
     font-size: 10px;
 }
 
-th .sort-icon.active {
+.th .sort-icon.active {
     opacity: 1;
     color: var(--primary);
 }
 
 /* 列宽拖动手柄 */
-th .resize-handle {
+.th .resize-handle {
     position: absolute;
     right: 0;
     top: 0;
     bottom: 0;
-    /* 命中区从 4px 加宽到 8px：原来太窄极易点偏落到 th 上触发排序，
-       用户感觉"拖窄不生效"其实是没抓到手柄。 */
+    /* 命中区 8px：太窄极易点偏落到 th 上触发排序，用户感觉"拖窄不生效"。 */
     width: 8px;
     cursor: col-resize;
     background: transparent;
     z-index: 1;
 }
 
-th .resize-handle:hover,
-th .resize-handle.active {
+.th .resize-handle:hover,
+.th .resize-handle.active {
     background: var(--primary);
 }
 
-td {
+/* 数据单元格视觉样式（从旧 td 平移） */
+.td {
     padding: 9px 14px;
     border-bottom: 1px solid var(--border-light);
-    /* fixed 布局下列宽由 th 控制；这里只负责视觉截断：超出部分省略号隐藏，
-       列宽足够时自然完整显示。 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    /* min-width:0 是关键双保险——WebKitGTK (Linux) 在 table-layout:fixed 下仍把 td 的
-       nowrap 内容算进列最小宽度，导致"拖不动"。显式 min-width:0 让单元格贡献的
-       min-content 降为 0，配合上方 colgroup 的硬 <col> 宽度，两个引擎都能自由拖窄。
-       WKWebView/Blink 本就遵守规范，此行对它们无害。 */
-    min-width: 0;
     color: var(--text);
 }
 
-/* IP 列特殊样式（等宽字体；列宽统一由 th 决定） */
-td.ip-cell {
+/* IP 列特殊样式（等宽字体；列宽由 var(--col-i) 决定） */
+.td.ip-cell {
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
     font-size: 12px;
 }
 
 /* IPv6 地址等宽显示 */
-td.ipv6-cell {
+.td.ipv6-cell {
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
     font-size: 12px;
 }
 
 /* link 列也遵循统一截断规则：列窄时省略号隐藏，列宽足够时完整显示 */
-td.link-cell {
+.td.link-cell {
     line-height: 1.45;
 }
 
@@ -1800,14 +1826,6 @@ td.link-cell {
 
 .cell-link:active {
     color: #1e40af;
-}
-
-tr:hover {
-    background: var(--primary-light);
-}
-
-tr:last-child td {
-    border-bottom: none;
 }
 
 /* 链接样式 */
