@@ -196,7 +196,6 @@ export function renderTable(fields) {
                 </div>
                 `;
             }).join('')}
-            <div class="ft-filler" aria-hidden="true"></div>
         </div>
     `;
 
@@ -221,7 +220,6 @@ export function renderTable(fields) {
                     </div>
                 `;
             }).join('')}
-            <div class="ft-filler" aria-hidden="true"></div>
         </div>
     `).join('');
 
