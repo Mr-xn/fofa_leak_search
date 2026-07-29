@@ -1697,37 +1697,14 @@ body {
     /* tbody 内含多个 .ft-tr */
 }
 
-/* 行：flex 容器。width:100% + min-width:max-content 兼顾两种场景：
-   - 列少（Σ cell width < 容器宽）：width:100% 生效 → 行撑满容器，最后一列贴右边框，
-     且窗口缩放时行宽自动跟随父容器变化（响应式）。
-   - 列多（Σ cell width > 容器宽）：min-width:max-content 生效 → 行宽=内容总宽，
-     cell 不被压缩（flex-shrink:0），自然溢出祖父 .table-container 的 overflow-x:auto 出滚动条。
-   两条规则同时存在，浏览器取较大者，两种场景都正确。 */
+/* 行：flex 容器。width:100% 撑满 table-container，窗口缩放时行宽自动跟随。
+   每个 cell 用 flex:1 1 auto 自动分配剩余空间，无需 min-width:max-content（列会自动
+   按比例拉伸填满，不会留透明空白；空间不足时 flex-shrink:1 自动收缩并出横向滚动）。 */
 .ft-tr {
     display: flex;
     align-items: stretch;
     width: 100%;
-    min-width: max-content;
     box-sizing: border-box;
-}
-/* 弹性填充：吸收"列总宽 < 容器宽"时的剩余空间，让表格撑满容器右侧不留白。
-   旧 <table> 靠 table-layout:fixed 自动把剩余空间分给各列；div+flex 下 cell 宽度固定（CSS 变量），
-   不会自动拉伸，故需一个 flex:1 的空占位符吸收余量。列宽足够时该元素宽度为 0，无副作用。 */
-.ft-filler {
-    flex: 1 1 0;
-    min-width: 0;
-    box-sizing: border-box;
-}
-/* 表头填充需要与 .th 一致的背景和下边框，视觉上延续表头行 */
-.ft-thead .ft-filler {
-    border-bottom: 2px solid var(--border);
-}
-/* 数据行填充需要与 .td 一致的下边框，视觉上延续数据行 */
-.ft-tbody .ft-filler {
-    border-bottom: 1px solid var(--border-light);
-}
-.ft-tr:last-child .ft-filler {
-    border-bottom: none;
 }
 .ft-tr:hover {
     background: var(--primary-light);
@@ -1737,10 +1714,16 @@ body {
 }
 
 /* 单元格基类：th（表头）与 td（数据）共享。
-   flex-shrink:0 关键——不被 flex 压缩，列宽严格由 width(var(--col-i)) 决定；
-   overflow+ellipsis+nowrap 处理视觉截断，列宽足够时自然完整显示。 */
+   flex: 1 1 auto —— flex-basis:auto 读取 width 属性（内联 width: var(--col-N)），
+   flex-grow:1 让所有列按基础宽度比例分配容器的剩余空间
+   （列总宽 < 容器时，多余空间按各列 width 比例加到各列，不产生透明空白）；
+   flex-shrink:1 允许列在空间不足时收缩。overflow+ellipsis+nowrap 处理视觉截断。
+   拖动时改 width（更新 CSS 变量），该列在分配中的比例随之变化。
+   min-width:0 是关键——flex 默认 min-width:auto 会阻止收缩到内容宽度以下，
+   显式 0 让 cell 可被压缩，使 flex-grow 的空间分配生效。 */
 .th, .td {
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    min-width: 0;
     box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
