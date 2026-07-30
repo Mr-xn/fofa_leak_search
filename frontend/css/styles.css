@@ -901,6 +901,53 @@ body {
     cursor: not-allowed;
 }
 
+/* ==================== 筛选值标签 chip ==================== */
+.filter-add-btn {
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+.filter-add-btn:hover { border-color: var(--primary); color: var(--primary); }
+.filter-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+    min-height: 0;
+}
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+}
+/* 操作符颜色：= 默认、!= 红、*= 蓝、== 橙 */
+.filter-chip.op-eq { border-color: var(--border); }
+.filter-chip.op-ne { border-color: var(--error); color: var(--error); }
+.filter-chip.op-fuzzy { border-color: var(--primary); color: var(--primary); }
+.filter-chip.op-exact { border-color: var(--warning); color: var(--warning); }
+.filter-chip-remove {
+    cursor: pointer;
+    font-weight: bold;
+    opacity: 0.6;
+    margin-left: 2px;
+}
+.filter-chip-remove:hover { opacity: 1; }
+
 .filter-input-wrapper input {
     flex: 1;
     min-width: 0;
