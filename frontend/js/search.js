@@ -2,7 +2,7 @@
 
 import { state, STORAGE_KEYS } from './config.js';
 import { showToast, formatNumber, escapeHtml, formatTime } from './utils.js';
-import { normalizeQuery } from './query-normalizer.js';
+import { normalizeQuery, composeQuery } from './query-normalizer.js';
 import { addToHistory, deleteHistoryItem, getCacheKey, getFromCache, saveToCache, incrementApiCalls, incrementDataCount } from './storage.js';
 import { fetchSearchResults } from './api.js';
 import { getSelectedFields, showApiKeyModal, getFilterQuery, getActiveFiltersData, hasActiveFilters } from './ui.js';
@@ -105,6 +105,7 @@ export async function doSearch() {
     // 解析数据范围
     const dataRange = document.getElementById('dataRange').value;
     let full = false;
+    const extraConditions = [];
 
     if (dataRange === 'full') {
         // 全部数据：full=true，不添加 after 条件
@@ -112,7 +113,7 @@ export async function doSearch() {
     } else if (dataRange.startsWith('after=')) {
         // 指定时间范围：需要 full=true 才能搜索超过一年的数据
         full = true;
-        query = `${query} && ${dataRange}`;
+        extraConditions.push(dataRange);
     }
     // dataRange === 'default' 时：近一年，full=false，不添加 after
 
@@ -120,8 +121,11 @@ export async function doSearch() {
     const activeFiltersData = getActiveFiltersData();
     const filterQuery = getFilterQuery();
     if (filterQuery) {
-        query = `${query} && ${filterQuery}`;
+        extraConditions.push(filterQuery);
     }
+
+    // 合成最终查询（搜索框整体括号包裹，避免 || 与 && 优先级歧义）
+    query = composeQuery(baseQuery, extraConditions);
 
     state.currentQuery = query;
     state.currentPage = 1;

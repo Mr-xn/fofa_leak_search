@@ -3,6 +3,7 @@
 import { state, STORAGE_KEYS } from './config.js';
 import { escapeHtml, formatTime, showToast } from './utils.js';
 import { restoreFiltersFromData, getFilterQuery, getActiveFiltersData } from './ui.js';
+import { composeQuery } from './query-normalizer.js';
 import { updateSearchButtonState } from './search.js';
 import { FOFA_RULES } from './fofa-rules.js';
 
@@ -566,7 +567,7 @@ export function updateFavoriteButtonState() {
     // 是否有筛选条件；决定「内置规则 + 筛选」是否为一条独立可收藏的组合
     const filterQuery = getFilterQuery();
     const hasFilters = !!filterQuery;
-    const currentQuery = filterQuery ? `${baseQuery} && ${filterQuery}` : baseQuery;
+    const currentQuery = composeQuery(baseQuery, filterQuery ? [filterQuery] : []);
 
     // 仅当纯内置规则（无筛选）时显示灰色「内置」态
     if (baseQuery && !hasFilters && isSystemFavorite(baseQuery)) {
@@ -604,7 +605,7 @@ export function handleFavoriteClick() {
     const filtersData = getActiveFiltersData();
     const filterQuery = getFilterQuery();
     const hasFilters = !!filterQuery;
-    const mergedQuery = filterQuery ? `${baseQuery} && ${filterQuery}` : baseQuery;
+    const mergedQuery = composeQuery(baseQuery, filterQuery ? [filterQuery] : []);
 
     // 仅纯内置规则（无筛选）不可切换收藏；「内置规则 + 筛选」是独立组合，可收藏
     if (!hasFilters && isSystemFavorite(baseQuery)) {

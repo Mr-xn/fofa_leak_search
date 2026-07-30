@@ -1,7 +1,7 @@
 // js/icon-hash.js - Icon Hash 计算 (MurmurHash3 32-bit + Base64)
 
 import { showToast } from './utils.js';
-import { updateFilterInput } from './ui.js';
+import { submitFilterValue } from './ui.js';
 import { updateSearchButtonState } from './search.js';
 import { info as logInfo, error as logError } from './logger.js';
 import { isTauri, fetchUrlRaw } from './tauri-bridge.js';
@@ -358,8 +358,10 @@ export function applyIconHashFilter() {
         showToast('请先计算 hash', 'error');
         return;
     }
-    // 使用 icon_hash 筛选
-    updateFilterInput('icon_hash', _lastIconHash);
+    // 使用 icon_hash 筛选：先回填输入框，再走 submitFilterValue
+    const hashInput = document.querySelector('input[data-key="icon_hash"]');
+    if (hashInput) hashInput.value = _lastIconHash;
+    submitFilterValue('icon_hash');
     closeIconHashModal();
     showToast(`已填入筛选: icon_hash="${_lastIconHash}"`, 'success');
 }

@@ -877,6 +877,53 @@ export function getSelectedFields() {
 // 当前激活的筛选条件
 const activeFilters = new Map();
 
+// condition 唯一 id 生成器（自增 + 时间戳，保证进程内唯一）
+let _cidCounter = 0;
+export function genCid() {
+    _cidCounter++;
+    return `c${Date.now().toString(36)}_${_cidCounter}`;
+}
+
+/**
+ * 把任意历史格式的单条筛选记录归一化为 condition 数组
+ * 兼容三种形态：
+ *  - 新格式 {conditions:[{cid,operator,value}]}
+ *  - 中间格式 {operator, values:[...]}
+ *  - 旧格式 {value, operator}（字符串 value）
+ * 仅用于输入框类型（调用方已判断非布尔/选项）
+ * @param {object} data
+ * @returns {Array<{cid:string, operator:string, value:string}>}
+ */
+function normalizeConditions(data) {
+    if (!data) return [];
+    if (Array.isArray(data.conditions)) {
+        return data.conditions
+            .filter(c => c && c.value != null && String(c.value).trim())
+            .map(c => ({
+                cid: c.cid || genCid(),
+                operator: c.operator || '=',
+                value: String(c.value).trim(),
+            }));
+    }
+    if (Array.isArray(data.values)) {
+        return data.values
+            .filter(v => v != null && String(v).trim())
+            .map(v => ({
+                cid: genCid(),
+                operator: data.operator || '=',
+                value: String(v).trim(),
+            }));
+    }
+    if (data.value != null && String(data.value).trim()) {
+        return [{
+            cid: genCid(),
+            operator: data.operator || '=',
+            value: String(data.value).trim(),
+        }];
+    }
+    return [];
+}
+
 // 获取所有筛选配置的扁平数组
 function getAllFilters() {
     return [
@@ -948,7 +995,7 @@ function renderFilterSection(title, filters, vipLevel, type) {
             // 操作符选择器
             let operatorHtml = '';
             if (filter.operators && filter.operators.length > 0) {
-                operatorHtml = `<select class="filter-operator" data-key="${filter.key}" data-field="${filter.key}" onchange="updateFilterOperator('${filter.key}', this.value)" ${disabled ? 'disabled' : ''}>`;
+                operatorHtml = `<select class="filter-operator" data-key="${filter.key}" data-field="${filter.key}" ${disabled ? 'disabled' : ''}>`;
                 filter.operators.forEach(op => {
                     operatorHtml += `<option value="${op}">${op}</option>`;
                 });
@@ -961,8 +1008,10 @@ function renderFilterSection(title, filters, vipLevel, type) {
                     <div class="filter-input-wrapper">
                         ${operatorHtml}
                         <input type="${filter.type}" placeholder="${filter.placeholder || ''}" data-key="${filter.key}"
-                            ${disabled ? 'disabled' : ''} onchange="updateFilterInput('${filter.key}', this.value)">
+                            ${disabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter'){event.preventDefault();submitFilterValue('${filter.key}')}" onblur="submitFilterValue('${filter.key}')">
+                        <button type="button" class="filter-add-btn" onclick="submitFilterValue('${filter.key}')" ${disabled ? 'disabled' : ''}>+</button>
                     </div>
+                    <div class="filter-chips" data-field="${filter.key}"></div>
                 </div>
             `;
         });
@@ -1002,7 +1051,7 @@ function renderFilterSection(title, filters, vipLevel, type) {
                 // 操作符选择器
                 let operatorHtml = '';
                 if (filter.operators && filter.operators.length > 0) {
-                    operatorHtml = `<select class="filter-operator" data-key="${filter.key}" data-field="${filter.key}" onchange="updateFilterOperator('${filter.key}', this.value)" ${disabled ? 'disabled' : ''}>`;
+                    operatorHtml = `<select class="filter-operator" data-key="${filter.key}" data-field="${filter.key}" ${disabled ? 'disabled' : ''}>`;
                     filter.operators.forEach(op => {
                         operatorHtml += `<option value="${op}">${op}</option>`;
                     });
@@ -1015,8 +1064,10 @@ function renderFilterSection(title, filters, vipLevel, type) {
                         <div class="filter-input-wrapper">
                             ${operatorHtml}
                             <input type="${filter.type}" placeholder="${filter.placeholder || ''}" data-key="${filter.key}"
-                                ${disabled ? 'disabled' : ''} onchange="updateFilterInput('${filter.key}', this.value)">
+                                ${disabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter'){event.preventDefault();submitFilterValue('${filter.key}')}" onblur="submitFilterValue('${filter.key}')">
+                            <button type="button" class="filter-add-btn" onclick="submitFilterValue('${filter.key}')" ${disabled ? 'disabled' : ''}>+</button>
                         </div>
+                        <div class="filter-chips" data-field="${filter.key}"></div>
                     </div>
                 `;
             }
@@ -1062,28 +1113,101 @@ export function toggleFilter(el, key) {
     updateActiveFiltersDisplay();
 }
 
-// 更新操作符
-export function updateFilterOperator(key, operator) {
-    const existing = activeFilters.get(key);
-    if (existing) {
-        existing.operator = operator;
-        activeFilters.set(key, existing);
-        updateActiveFiltersDisplay();
+// 操作符前缀符号（chip 显示用）
+const OP_PREFIX = { '=': '', '!=': '≠', '*=': '~', '==': '≡' };
+// 操作符颜色类（对应 CSS）
+const OP_COLOR_CLASS = { '=': 'op-eq', '!=': 'op-ne', '*=': 'op-fuzzy', '==': 'op-exact' };
+
+// 渲染某字段的值标签 chip 列表
+export function renderFilterChips(field) {
+    const container = document.querySelector(`.filter-chips[data-field="${field}"]`);
+    if (!container) return;
+    const record = activeFilters.get(field);
+    const conditions = (record && Array.isArray(record.conditions)) ? record.conditions : [];
+    if (conditions.length === 0) {
+        container.innerHTML = '';
+        return;
     }
+    container.innerHTML = conditions.map(c => {
+        const prefix = OP_PREFIX[c.operator] != null ? OP_PREFIX[c.operator] : '';
+        const colorClass = OP_COLOR_CLASS[c.operator] || 'op-eq';
+        const label = prefix ? `${prefix}${escapeHtml(c.value)}` : escapeHtml(c.value);
+        return `<span class="filter-chip ${colorClass}" data-cid="${escapeHtml(c.cid)}">${label}<span class="filter-chip-remove" data-field="${escapeHtml(field)}" data-cid="${escapeHtml(c.cid)}">&times;</span></span>`;
+    }).join('');
 }
 
-// 更新输入框筛选
-export function updateFilterInput(key, value) {
-    // 获取当前操作符
-    const operatorSelect = document.querySelector(`.filter-operator[data-key="${key}"]`);
+// 事件委托：输入框旁 chip 的 × 按钮（.filter-chip-remove）点击 → 删除单个 condition。
+// chips 由 renderFilterChips 用 innerHTML 重建，故挂到稳定祖先（document）一次，
+// 用 _delegatedChips 标志防止重复绑定。与预览栏 .remove-filter 委托互不干扰（选择器不同）。
+function setupChipRemoveDelegation() {
+    if (document._delegatedChips) return;
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.filter-chip-remove');
+        if (!btn) return;
+        const field = btn.dataset.field;
+        const cid = btn.dataset.cid;
+        if (field && cid) {
+            removeFilterCondition(field, cid);
+        }
+    });
+    document._delegatedChips = true;
+}
+setupChipRemoveDelegation();
+
+// 提交一个筛选值（输入框类型）
+// 读当前操作符下拉 + 输入框值，push 进 conditions；逗号拆分；按 (operator,value) 去重
+export function submitFilterValue(field) {
+    const input = document.querySelector(`input[data-key="${field}"]`);
+    const operatorSelect = document.querySelector(`.filter-operator[data-key="${field}"]`);
+    if (!input) return;
+    const raw = input.value.trim();
+    if (!raw) return;
     const operator = operatorSelect ? operatorSelect.value : '=';
 
-    if (value.trim()) {
-        activeFilters.set(key, { filter: key, value: value.trim(), operator });
-    } else {
-        activeFilters.delete(key);
+    // 含逗号拆分（贴合 FOFA 多值语义）
+    const newValues = raw.split(',').map(v => v.trim()).filter(Boolean);
+    if (newValues.length === 0) return;
+
+    let record = activeFilters.get(field);
+    if (!record) {
+        record = { filter: field, conditions: [] };
+        activeFilters.set(field, record);
+    }
+    if (!Array.isArray(record.conditions)) {
+        record.conditions = normalizeConditions(record);
     }
 
+    let dupCount = 0;
+    newValues.forEach(val => {
+        const escaped = val.replace(/"/g, '\\"');
+        const exists = record.conditions.some(c => c.operator === operator && c.value === escaped);
+        if (exists) {
+            dupCount++;
+        } else {
+            record.conditions.push({ cid: genCid(), operator, value: escaped });
+        }
+    });
+
+    if (dupCount > 0) {
+        showToast(`已存在相同条件，跳过 ${dupCount} 项`, 'info');
+    }
+
+    input.value = '';
+    renderFilterChips(field);
+    updateActiveFiltersDisplay();
+}
+
+// 按 cid 删除单个 condition（输入框类型）
+export function removeFilterCondition(field, cid) {
+    const record = activeFilters.get(field);
+    if (!record || !Array.isArray(record.conditions)) return;
+    record.conditions = record.conditions.filter(c => c.cid !== cid);
+    if (record.conditions.length === 0) {
+        activeFilters.delete(field);
+        const input = document.querySelector(`input[data-key="${field}"]`);
+        if (input) input.value = '';
+    }
+    renderFilterChips(field);
     updateActiveFiltersDisplay();
 }
 
@@ -1118,6 +1242,9 @@ function resetFilterUI() {
     document.querySelectorAll('.filter-operator').forEach(select => {
         select.value = '=';
     });
+    document.querySelectorAll('.filter-chips').forEach(c => {
+        c.innerHTML = '';
+    });
 }
 
 // 清除所有筛选条件
@@ -1136,29 +1263,27 @@ export function restoreFiltersFromData(filtersData) {
 
     // 恢复筛选条件
     Object.entries(filtersData).forEach(([key, data]) => {
+        if (!data || typeof data !== 'object' || typeof data.filter !== 'string') return;
         // 验证 key 是否对应有效的 DOM 元素
         const tag = document.querySelector(`.filter-tag[data-key="${key}"]`);
         const input = document.querySelector(`input[data-key="${key}"]`);
         if (!tag && !input) return; // 跳过孤立的筛选条件
 
-        activeFilters.set(key, data);
-
-        // 恢复标签状态
-        if (tag) {
-            tag.classList.add('active');
-        }
-
-        // 恢复输入框状态
-        if (input) {
-            input.value = data.value;
-        }
-
-        // 恢复操作符状态
-        if (data.operator) {
+        const isInputType = !!input; // 输入框类型
+        if (isInputType) {
+            const conditions = normalizeConditions(data);
+            if (conditions.length === 0) return;
+            activeFilters.set(key, { filter: data.filter, conditions });
+            // 不回填输入框（多值无法塞进单输入框），只渲染 chips
+            renderFilterChips(data.filter);
+            // 回填操作符下拉为最后一个 condition 的操作符（下次提交默认）
+            const lastOp = conditions[conditions.length - 1].operator;
             const operatorSelect = document.querySelector(`.filter-operator[data-key="${key}"]`);
-            if (operatorSelect) {
-                operatorSelect.value = data.operator;
-            }
+            if (operatorSelect) operatorSelect.value = lastOp;
+        } else {
+            // 布尔/选项类型
+            activeFilters.set(key, { filter: data.filter, value: String(data.value) });
+            if (tag) tag.classList.add('active');
         }
     });
 
@@ -1179,59 +1304,63 @@ export function hasActiveFilters() {
     return activeFilters.size > 0;
 }
 
-// 更新已激活筛选显示
+// 更新已激活筛选显示（condition 级）
 function updateActiveFiltersDisplay() {
     const container = document.getElementById('activeFilters');
     if (!container) return;
 
     if (activeFilters.size === 0) {
         container.style.display = 'none';
+        container.innerHTML = '';
+        if (_updateSearchButtonState) _updateSearchButtonState();
         return;
     }
 
     container.style.display = 'flex';
-    let html = '';
-
     const allFilters = getAllFilters();
+    const previewParts = [];
 
     activeFilters.forEach((data, key) => {
-        let label = key;
         const config = allFilters.find(f => key === f.key || key === `${f.key}_true` || key === `${f.key}_false`)
             || allFilters.find(f => key.startsWith(f.key + '_'));
-        if (config) {
-            if (config.options) {
-                const idx = config.options.indexOf(data.value);
-                label = `${config.label}: ${config.optionLabels[idx]}`;
-            } else if (config.trueLabel) {
-                label = `${config.label}: ${data.value === 'true' ? config.trueLabel : config.falseLabel}`;
-            } else {
-                const op = data.operator || '=';
-                label = `${config.label} ${op} ${data.value}`;
-            }
-        }
+        if (!config) return;
 
-        html += `
-            <span class="active-filter-tag">
-                ${escapeHtml(label)}
-                <span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span>
-            </span>
-        `;
+        if (config.options) {
+            const idx = config.options.indexOf(data.value);
+            const lbl = `${config.label}: ${config.optionLabels[idx] != null ? config.optionLabels[idx] : data.value}`;
+            previewParts.push(`<span class="active-filter-tag">${escapeHtml(lbl)}<span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span></span>`);
+        } else if (config.trueLabel) {
+            const lbl = `${config.label}: ${data.value === 'true' ? config.trueLabel : config.falseLabel}`;
+            previewParts.push(`<span class="active-filter-tag">${escapeHtml(lbl)}<span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span></span>`);
+        } else if (Array.isArray(data.conditions)) {
+            // 输入框类型：每个 condition 一条
+            data.conditions.forEach(c => {
+                const opLabel = c.operator || '=';
+                previewParts.push(`<span class="active-filter-tag">${escapeHtml(config.label)} ${escapeHtml(opLabel)} ${escapeHtml(c.value)}<span class="remove-filter" data-key="${escapeHtml(key)}" data-cid="${escapeHtml(c.cid || '')}">&times;</span></span>`);
+            });
+        } else {
+            // 兼容旧格式残留
+            const op = data.operator || '=';
+            const lbl = `${config.label} ${op} ${data.value}`;
+            previewParts.push(`<span class="active-filter-tag">${escapeHtml(lbl)}<span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span></span>`);
+        }
     });
 
-    html += `
-        <span class="active-filter-tag active-filter-clear" data-action="clear-all">
-            清除全部
-        </span>
-    `;
+    previewParts.push(`<span class="active-filter-tag active-filter-clear" data-action="clear-all">清除全部</span>`);
+    container.innerHTML = previewParts.join('');
 
-    container.innerHTML = html;
-
-    // 事件委托：移除单个筛选
+    // 事件委托：移除单个筛选（区分整字段 vs 单 condition）
     if (!container._delegated) {
         container.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('.remove-filter');
             if (removeBtn) {
-                removeFilter(removeBtn.dataset.key);
+                const k = removeBtn.dataset.key;
+                const cid = removeBtn.dataset.cid;
+                if (cid) {
+                    removeFilterCondition(findFieldByKey(k), cid);
+                } else {
+                    removeFilter(k);
+                }
                 return;
             }
             if (e.target.closest('[data-action="clear-all"]')) {
@@ -1241,28 +1370,54 @@ function updateActiveFiltersDisplay() {
         container._delegated = true;
     }
 
-    // 更新搜索按钮状态
-    if (_updateSearchButtonState) {
-        _updateSearchButtonState();
-    }
+    if (_updateSearchButtonState) _updateSearchButtonState();
 }
 
-// 获取筛选查询字符串
+// 由 activeFilters 的 key 反查字段名（输入框类型 key===field；布尔/选项 key 含后缀）
+function findFieldByKey(key) {
+    const record = activeFilters.get(key);
+    if (record && record.filter) return record.filter;
+    return key;
+}
+
+// 获取筛选查询字符串（多值合并）
 export function getFilterQuery() {
     const parts = [];
 
     activeFilters.forEach((data, key) => {
+        // 布尔类型
         if (data.value === 'true' || data.value === 'false') {
-            // 布尔类型
             parts.push(`${data.filter}=${data.value}`);
-        } else if (data.filter === key) {
-            // 输入框类型 - 使用操作符
-            const op = data.operator || '=';
-            parts.push(`${data.filter}${op}"${data.value}"`);
-        } else {
-            // 选项类型
-            parts.push(`${data.filter}="${data.value}"`);
+            return;
         }
+        // 选项类型（key 含值后缀，filter !== key）
+        if (data.filter !== key && !Array.isArray(data.conditions)) {
+            parts.push(`${data.filter}="${data.value}"`);
+            return;
+        }
+        // 输入框类型 —— 归一化为 condition 数组
+        const conditions = normalizeConditions(data);
+        if (conditions.length === 0) return;
+
+        // 按 operator 分组
+        const byOp = {};
+        const opOrder = [];
+        conditions.forEach(c => {
+            if (!byOp[c.operator]) { byOp[c.operator] = []; opOrder.push(c.operator); }
+            byOp[c.operator].push(c.value);
+        });
+
+        // 按首次出现顺序遍历操作符，保持输出稳定
+        opOrder.forEach(op => {
+            const vals = byOp[op];
+            if (op === '=' || op === '*=') {
+                // 逗号合并进同一引号（OR 语义）
+                parts.push(`${data.filter}${op}"${vals.join(',')}"`);
+            } else {
+                // != / == 各自独立（AND 语义）
+                vals.forEach(v => parts.push(`${data.filter}${op}"${v}"`));
+            }
+        });
     });
 
     return parts.join(' && ');

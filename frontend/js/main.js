@@ -7,7 +7,7 @@ import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as c
 import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey,
          showCacheManager, closeCacheModal, initFieldTags, closeUserInfo, exportCacheData,
          toggleFieldsDropdown, toggleField, removeField,
-         initQuickFilters, toggleFilters, toggleFilter, updateFilterOperator, updateFilterInput, removeFilter, clearAllFilters, getFilterQuery,
+         initQuickFilters, toggleFilters, toggleFilter, submitFilterValue, removeFilterCondition, removeFilter, clearAllFilters, getFilterQuery,
          restoreFiltersFromData,
          exportConfigToFile, importConfigFromFile, toggleAdvanced, setSearchButtonUpdater,
          showSettingsModal, closeSettingsModal, saveSettingsApiKey, toggleSettingsPassword, saveProxySettings, toggleProxyEnabled, restoreProxyOnStartup,
@@ -47,8 +47,8 @@ window.toggleField = toggleField;
 window.removeField = removeField;
 window.toggleFilters = toggleFilters;
 window.toggleFilter = toggleFilter;
-window.updateFilterOperator = updateFilterOperator;
-window.updateFilterInput = updateFilterInput;
+window.submitFilterValue = submitFilterValue;
+window.removeFilterCondition = removeFilterCondition;
 window.removeFilter = removeFilter;
 window.clearAllFilters = clearAllFilters;
 window.exportConfigToFile = exportConfigToFile;

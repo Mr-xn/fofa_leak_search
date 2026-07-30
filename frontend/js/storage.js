@@ -385,13 +385,31 @@ export function incrementDataCount(count) {
 }
 
 // ==================== 搜索历史 ====================
-// 验证和清理筛选条件数据
+// 验证和清理筛选条件数据（兼容新格式 conditions 数组与旧格式 value/operator）
 function sanitizeFilters(filters) {
     if (!filters || typeof filters !== 'object') return null;
     const clean = {};
     for (const [key, val] of Object.entries(filters)) {
-        if (typeof key === 'string' && val && typeof val === 'object' && typeof val.filter === 'string') {
-            clean[key] = { filter: val.filter, value: String(val.value || ''), operator: val.operator || '=' };
+        if (typeof key !== 'string' || !val || typeof val !== 'object' || typeof val.filter !== 'string') continue;
+
+        if (Array.isArray(val.conditions)) {
+            // 新格式：输入框类型 condition 数组
+            const cleanConds = val.conditions
+                .filter(c => c && c.value != null && String(c.value).trim())
+                .map(c => ({
+                    cid: typeof c.cid === 'string' ? c.cid : '',
+                    operator: typeof c.operator === 'string' ? c.operator : '=',
+                    value: String(c.value).trim(),
+                }));
+            if (cleanConds.length > 0) {
+                clean[key] = { filter: val.filter, conditions: cleanConds };
+            }
+        } else if (val.value === 'true' || val.value === 'false') {
+            // 布尔类型
+            clean[key] = { filter: val.filter, value: val.value };
+        } else if (val.value != null) {
+            // 旧格式 / 选项类型
+            clean[key] = { filter: val.filter, value: String(val.value), operator: val.operator || '=' };
         }
     }
     return Object.keys(clean).length > 0 ? clean : null;
