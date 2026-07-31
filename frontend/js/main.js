@@ -870,7 +870,11 @@ async function _showTagPopover(anchor, entry, idx) {
     // 聚焦到筛选输入框
     setTimeout(() => filterInput.focus(), 50);
 }
-document.addEventListener('DOMContentLoaded', async () => {
+// 启动初始化。ES Module 脚本隐式 defer，通常在 DOMContentLoaded 之前执行；
+// 但部分 webview/环境下 module 执行被推迟到 DOMContentLoaded 之后（readyState
+// 已是 'interactive'/'complete'），此时再注册 DOMContentLoaded 监听器永远不会触发，
+// 导致所有按钮初始化、事件绑定都不执行（按钮可见但点不动）。故做 readyState 守卫。
+async function initApp() {
     // 设置搜索按钮更新函数（用于筛选条件变化时更新按钮状态）
     setSearchButtonUpdater(updateSearchButtonState);
 
@@ -1399,7 +1403,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => autoCheckUpdate(), 2000);
     }
 
-});
+}
+
+// readyState 守卫：DOM 未加载完则等 DOMContentLoaded，否则立即执行初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 
 // 保存自动检测更新开关状态（非模块作用域，供 HTML onclick 调用）
 function saveAutoCheckUpdate(enabled) {
