@@ -1411,8 +1411,10 @@ export function getFilterQuery() {
         opOrder.forEach(op => {
             const vals = byOp[op];
             if (op === '=' || op === '*=') {
-                // 逗号合并进同一引号（OR 语义）
-                parts.push(`${data.filter}${op}"${vals.join(',')}"`);
+                // FOFA 不支持 port="80,443" 逗号多值 → 用 || 连接独立子句；
+                // 多值时整体括号包裹，避免与外层 && 优先级歧义（实测验证）
+                const clauses = vals.map(v => `${data.filter}${op}"${v}"`);
+                parts.push(clauses.length > 1 ? `(${clauses.join(' || ')})` : clauses[0]);
             } else {
                 // != / == 各自独立（AND 语义）
                 vals.forEach(v => parts.push(`${data.filter}${op}"${v}"`));
