@@ -3,6 +3,7 @@
 import { state, DB_CONFIG, STORAGE_KEYS } from './config.js';
 import { getCacheExpiry } from './utils.js';
 import { debug as logDebug, info as logInfo, warn as logWarn } from './logger.js';
+import { persistWithEviction, evictOldest } from './quota.js';
 
 // ==================== IndexedDB 初始化 ====================
 export function initIndexedDB() {
@@ -426,11 +427,22 @@ export function addToHistory(query, filters) {
         filters: sanitizeFilters(filters)
     });
 
-    if (state.searchHistory.length > 50) {
-        state.searchHistory = state.searchHistory.slice(0, 50);
+    // 不设条数上限：空间不足时淘汰最旧的记录（历史全部可淘汰，无受保护条目）
+    const result = persistWithEviction(
+        STORAGE_KEYS.searchHistory,
+        state.searchHistory,
+        entries => evictOldest(entries)
+    );
+
+    if (result.entries !== state.searchHistory) {
+        state.searchHistory = result.entries;
     }
 
-    localStorage.setItem(STORAGE_KEYS.searchHistory, JSON.stringify(state.searchHistory));
+    if (!result.ok) {
+        logWarn('storage', '搜索历史写入失败', { message: result.error?.message || String(result.error) });
+    } else if (result.dropped > 0) {
+        logWarn('storage', '本地存储空间不足，已淘汰最旧的搜索历史', { dropped: result.dropped });
+    }
 }
 
 // 获取历史记录中关联的筛选条件

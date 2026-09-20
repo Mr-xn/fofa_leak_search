@@ -6,14 +6,41 @@ import { restoreFiltersFromData, getFilterQuery, getActiveFiltersData } from './
 import { composeQuery } from './query-normalizer.js';
 import { updateSearchButtonState } from './search.js';
 import { FOFA_RULES } from './fofa-rules.js';
+import { persistWithEviction, evictOldest } from './quota.js';
 
 // ==================== 存储操作 ====================
 
-const MAX_FAVORITES = 100;
 const SEED_MARKER_KEY = 'fofa_rules_seeded';
 
+/** 系统内置规则受保护：即使本地空间耗尽也不淘汰 */
+function isSystemRule(entry) {
+    return entry && entry.system === true;
+}
+
+/**
+ * 持久化收藏。
+ * 默认不限制条数，能否写入取决于 localStorage 剩余空间；
+ * 空间不足时只淘汰最旧的【用户】收藏，系统内置规则永不删除。
+ */
 function persistFavorites() {
-    localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(state.favorites));
+    const result = persistWithEviction(
+        STORAGE_KEYS.favorites,
+        state.favorites,
+        entries => evictOldest(entries, isSystemRule)
+    );
+
+    if (result.entries !== state.favorites) {
+        // 发生了淘汰：内存与磁盘保持一致，避免界面上显示已不存在于磁盘的收藏
+        state.favorites = result.entries;
+    }
+
+    if (result.dropped > 0) {
+        showToast(`本地存储空间不足，已清理 ${result.dropped} 条最旧的收藏`, 'error');
+    } else if (!result.ok) {
+        showToast('收藏保存失败：本地存储写入被拒绝', 'error');
+    }
+
+    return result;
 }
 
 /**
@@ -41,11 +68,6 @@ export function addFavorite(baseQuery, filtersData, mergedQuery) {
         filters: filtersData || null,
         time: new Date().toISOString()
     });
-
-    // 上限裁剪
-    if (state.favorites.length > MAX_FAVORITES) {
-        state.favorites = state.favorites.slice(0, MAX_FAVORITES);
-    }
 
     persistFavorites();
 }
