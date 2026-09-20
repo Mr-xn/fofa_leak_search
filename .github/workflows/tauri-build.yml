@@ -10,7 +10,48 @@ permissions:
   contents: write
 
 jobs:
+  # 只由这一个 job 创建 release。之前 8 个矩阵 job 各自"查不到就创建草稿"，
+  # 并发下产生了多个同名草稿（v1.2.8 运行时出现 3 个，安装包被分散存放，
+  # 其中一个草稿完全没有 x64 Windows 安装包）。
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - name: Find or create draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          REPO="${GITHUB_REPOSITORY}"
+
+          # 已存在则复用（例如重跑同一个 tag），按 API 顺序取最新一个
+          find_id() {
+            gh api "repos/${REPO}/releases?per_page=100" \
+              --jq ".[] | select(.tag_name==\"${TAG}\") | .id" | head -n1
+          }
+
+          RELEASE_ID="$(find_id)"
+          if [ -z "${RELEASE_ID}" ]; then
+            gh release create "${TAG}" \
+              --repo "${REPO}" \
+              --title "FOFA Leak Search ${TAG}" \
+              --notes "FOFA Leak Search Desktop Release" \
+              --draft
+            RELEASE_ID="$(find_id)"
+          fi
+
+          if [ -z "${RELEASE_ID}" ]; then
+            echo "::error::无法为 ${TAG} 创建或找到 draft release"
+            exit 1
+          fi
+
+          echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+          echo "使用 release id=${RELEASE_ID}（tag=${TAG}）"
+
   build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -138,17 +179,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Standard build: creates/updates the GitHub release and uploads artifacts.
+      # Standard build: uploads artifacts to the release created by create-release.
+      # releaseId 让 tauri-action 只上传、不创建 release（tagName/releaseName 不再参与查找）；
+      # tagName 仍需保留：updater 的 latest.json 用它拼接下载地址；
+      # releaseDraft 必须与已存在的草稿状态一致。
       - name: Build Tauri App
         if: ${{ !matrix.legacy }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           tagName: ${{ github.ref_name }}
-          releaseName: FOFA Leak Search ${{ github.ref_name }}
-          releaseBody: |
-            FOFA Leak Search Desktop Release
           releaseDraft: true
           prerelease: false
           tauriScript: npx tauri
@@ -200,11 +242,7 @@ jobs:
           done
 
           if [ ${#UPLOAD_FILES[@]} -gt 0 ]; then
-            # Create the draft release if another job hasn't done so yet.
-            gh release create "${{ github.ref_name }}" \
-              --title "FOFA Leak Search ${{ github.ref_name }}" \
-              --notes "FOFA Leak Search Desktop Release" \
-              --draft 2>/dev/null || true
-
+            # release 已由 create-release 建好（build 依赖它），这里只上传。
+            # 不要重新引入 "查不到就创建"：并发下会产生同名草稿。
             gh release upload "${{ github.ref_name }}" "${UPLOAD_FILES[@]}" --clobber
           fi
