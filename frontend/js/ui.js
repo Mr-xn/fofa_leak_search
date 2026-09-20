@@ -1,10 +1,11 @@
 // js/ui.js - UI 交互（弹窗、提示、字段选择）
 
 import { state, STORAGE_KEYS, FIELD_LABELS, DEFAULT_FIELDS, FIELDS_CONFIG, FILTERS_CONFIG, VIP_LEVEL_MAP } from './config.js';
-import { showToast, formatCacheExpiry, escapeHtml } from './utils.js';
+import { showToast, showConfirm, formatCacheExpiry, escapeHtml } from './utils.js';
 import { clearAllCache, getCacheStats, getCachedQueries, getAllCachedData, exportToCSV, exportToJSON } from './storage.js';
 import { setProxyConfig, getProxyConfig as getTauriProxyConfig, setRequestConfig, getRequestConfig } from './tauri-bridge.js';
 import { getLogs, clearLogs, exportLogs, isLoggingEnabled, getLogLevel, info as logInfo, warn as logWarn } from './logger.js';
+import { persistWithEviction, evictOldest } from './quota.js';
 
 // 延迟导入 search.js 中的函数，避免循环依赖
 let _updateSearchButtonState = null;
@@ -486,7 +487,7 @@ export function importConfigFromFile() {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             try {
                 const content = event.target.result.trim();
                 let config;
@@ -500,7 +501,7 @@ export function importConfigFromFile() {
                     config = JSON.parse(content);
                 }
 
-                applyConfig(config, file.name);
+                await applyConfig(config, file.name);
             } catch (err) {
                 showToast('配置文件格式无效', 'error');
             }
@@ -511,18 +512,130 @@ export function importConfigFromFile() {
     input.click();
 }
 
-// 应用配置到 localStorage（已导出供测试）
-export function applyConfig(config, source) {
+/**
+ * 合并导入的收藏：以完整 query 为身份键去重。
+ * 冲突时本机条目优先（用户可能改过名、打过标签），仅当本机缺失时用导入值补全；
+ * 系统内置规则一律以本机为准（由 seedSystemRules 维护），不从文件导入。
+ * @param {string} rawFavorites - 配置文件里的 favorites 字符串
+ * @param {Array} localFavorites - 本机收藏
+ * @returns {{merged: Array, added: number, skipped: number, valid: boolean}}
+ */
+function mergeFavorites(rawFavorites, localFavorites) {
+    let imported;
+    try {
+        imported = JSON.parse(rawFavorites);
+    } catch {
+        return { merged: localFavorites, added: 0, skipped: 0, valid: false };
+    }
+    if (!Array.isArray(imported)) {
+        return { merged: localFavorites, added: 0, skipped: 0, valid: false };
+    }
+
+    const localSystem = localFavorites.filter(f => f.system === true);
+    const localUser = localFavorites.filter(f => f.system !== true);
+    const byQuery = new Map(localUser.filter(f => f.query).map(f => [f.query, f]));
+
+    let added = 0;
+    let skipped = 0;
+    for (const entry of imported) {
+        if (!entry || entry.system === true || !entry.query) continue;
+
+        const existing = byQuery.get(entry.query);
+        if (existing) {
+            if (!existing.name && entry.name) existing.name = entry.name;
+            const hasTags = Array.isArray(existing.tags) && existing.tags.length > 0;
+            if (!hasTags && Array.isArray(entry.tags)) existing.tags = entry.tags.slice();
+            skipped++;
+            continue;
+        }
+
+        const copy = { ...entry };
+        // 兼容旧导出：缺少 tags 的用户收藏归入「用户」标签
+        if (!Array.isArray(copy.tags) || copy.tags.length === 0) copy.tags = ['用户'];
+        byQuery.set(entry.query, copy);
+        added++;
+    }
+
+    // 时间倒序，与 addFavorite 的「最新在前」一致
+    const mergedUser = [...byQuery.values()].sort(
+        (a, b) => String(b.time || '').localeCompare(String(a.time || ''))
+    );
+    return { merged: [...mergedUser, ...localSystem], added, skipped, valid: true };
+}
+
+/**
+ * 合并导入的搜索历史：以 query 为身份键去重，本机条目优先保留。
+ * @param {string} rawHistory - 配置文件里的 searchHistory 字符串
+ * @param {Array} localHistory - 本机历史
+ * @returns {{merged: Array, added: number, valid: boolean}}
+ */
+function mergeHistory(rawHistory, localHistory) {
+    let imported;
+    try {
+        imported = JSON.parse(rawHistory);
+    } catch {
+        return { merged: localHistory, added: 0, valid: false };
+    }
+    if (!Array.isArray(imported)) {
+        return { merged: localHistory, added: 0, valid: false };
+    }
+
+    const byQuery = new Map(localHistory.filter(h => h && h.query).map(h => [h.query, h]));
+    let added = 0;
+    for (const entry of imported) {
+        if (!entry || typeof entry.query !== 'string' || !entry.query) continue;
+        if (byQuery.has(entry.query)) continue;
+        byQuery.set(entry.query, entry);
+        added++;
+    }
+
+    const merged = [...byQuery.values()].sort(
+        (a, b) => String(b.time || '').localeCompare(String(a.time || ''))
+    );
+    return { merged, added, valid: true };
+}
+
+/**
+ * 应用配置到 localStorage（已导出供测试）。
+ *
+ * 字段语义分三类：
+ * - 单值设置（Key、代理、超时、每页条数等）：覆盖，空值不清空本机；
+ * - 集合（收藏、搜索历史）：与本机合并去重，不丢弃已有数据，不设条数上限；
+ * - API Key：唯一不可恢复的覆盖点，仅在与本机不同时确认一次。
+ */
+export async function applyConfig(config, source) {
     if (!config.version || !config.data) {
         showToast('无效的配置数据', 'error');
         return;
     }
 
     const { data } = config;
+    const notes = [];
 
-    // 恢复配置到 localStorage
-    if (data.apiKey) localStorage.setItem(STORAGE_KEYS.apiKey, data.apiKey);
-    if (data.searchHistory) localStorage.setItem(STORAGE_KEYS.searchHistory, data.searchHistory);
+    // API Key：覆盖后旧值无法找回，非空且与本机不同时先确认
+    if (data.apiKey) {
+        const currentKey = localStorage.getItem(STORAGE_KEYS.apiKey) || '';
+        if (!currentKey || currentKey === data.apiKey) {
+            localStorage.setItem(STORAGE_KEYS.apiKey, data.apiKey);
+        } else {
+            const confirmed = await showConfirm({
+                title: '覆盖 API Key？',
+                message: `配置文件里的 API Key 尾号 <strong>${escapeHtml(data.apiKey.slice(-4))}</strong>，`
+                    + `与本机当前 Key（尾号 <strong>${escapeHtml(currentKey.slice(-4))}</strong>）不同。`,
+                confirmText: '覆盖',
+                cancelText: '保留当前',
+                defaultFocus: 'cancel'
+            });
+            if (confirmed) {
+                localStorage.setItem(STORAGE_KEYS.apiKey, data.apiKey);
+                notes.push('API Key 已覆盖');
+            } else {
+                notes.push('API Key 保留本机');
+            }
+        }
+    }
+
+    // 单值设置：覆盖（空值不覆盖本机已有配置）
     if (data.selectedFields) localStorage.setItem(STORAGE_KEYS.selectedFields, data.selectedFields);
     if (data.useCache) localStorage.setItem(STORAGE_KEYS.useCache, data.useCache);
     if (data.cacheTimeValue) localStorage.setItem(STORAGE_KEYS.cacheTimeValue, data.cacheTimeValue);
@@ -532,11 +645,16 @@ export function applyConfig(config, source) {
     if (data.loggingEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.loggingEnabled, data.loggingEnabled);
     if (data.loggingLevel) localStorage.setItem(STORAGE_KEYS.loggingLevel, data.loggingLevel);
     if (data.requestTimeout) localStorage.setItem(STORAGE_KEYS.requestTimeout, data.requestTimeout);
+    if (data.exportIncludeQuery !== undefined) localStorage.setItem(STORAGE_KEYS.exportIncludeQuery, data.exportIncludeQuery);
     if (data.proxyEnabled !== undefined) localStorage.setItem(STORAGE_KEYS.proxyEnabled, data.proxyEnabled);
     if (data.proxyHost !== undefined) localStorage.setItem(STORAGE_KEYS.proxyHost, data.proxyHost);
     if (data.proxyPort !== undefined) localStorage.setItem(STORAGE_KEYS.proxyPort, data.proxyPort);
     if (data.proxyUsername !== undefined) localStorage.setItem(STORAGE_KEYS.proxyUsername, data.proxyUsername);
     if (data.proxyPassword !== undefined) localStorage.setItem(STORAGE_KEYS.proxyPassword, data.proxyPassword);
+
+    // 请求头设置：导入后由启动流程同步到 Rust 侧（main.js 恢复请求配置）
+    if (data.userAgent !== undefined) localStorage.setItem(STORAGE_KEYS.userAgent, data.userAgent);
+    if (data.customHeaders !== undefined) localStorage.setItem(STORAGE_KEYS.customHeaders, data.customHeaders);
 
     // 兼容新旧配置：v2 使用 dataRange，v1 使用 timeRange + resultMode
     if (data.dataRange) {
@@ -546,22 +664,43 @@ export function applyConfig(config, source) {
         localStorage.setItem(STORAGE_KEYS.dataRange, data.timeRange || 'default');
     }
 
-    // 恢复用户收藏（仅非系统规则，内置规则由 seedSystemRules 重建）
+    // 收藏：与本机合并（系统内置规则始终以本机为准）
     if (data.favorites) {
-        try {
-            const imported = JSON.parse(data.favorites);
-            const userFavs = imported.filter(f => !f.system);
-            // 确保每条用户收藏有 tags 字段（兼容旧导出）
-            userFavs.forEach(f => { if (!f.tags) f.tags = ['用户']; });
-            const currentSystem = (() => {
-                try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.favorites) || '[]').filter(f => f.system); }
-                catch { return []; }
-            })();
-            localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify([...userFavs, ...currentSystem]));
-        } catch { /* 静默处理无效数据 */ }
+        const { merged, added, skipped, valid } = mergeFavorites(data.favorites, state.favorites);
+        if (valid) {
+            state.favorites = merged;
+            const result = persistWithEviction(
+                STORAGE_KEYS.favorites,
+                merged,
+                entries => evictOldest(entries, entry => entry && entry.system === true)
+            );
+            if (result.entries !== merged) state.favorites = result.entries;
+
+            notes.push(`收藏新增 ${added} 条${skipped > 0 ? `、跳过 ${skipped} 条重复` : ''}`);
+            if (result.dropped > 0) notes.push(`空间不足淘汰 ${result.dropped} 条最旧收藏`);
+            if (!result.ok) notes.push('收藏写入失败');
+        }
     }
 
-    showToast(`配置从 ${source} 导入成功，页面将刷新`, 'success');
+    // 搜索历史：同样合并去重
+    if (data.searchHistory) {
+        const { merged, added, valid } = mergeHistory(data.searchHistory, state.searchHistory);
+        if (valid) {
+            state.searchHistory = merged;
+            const result = persistWithEviction(
+                STORAGE_KEYS.searchHistory,
+                merged,
+                entries => evictOldest(entries)
+            );
+            if (result.entries !== merged) state.searchHistory = result.entries;
+
+            notes.push(`历史新增 ${added} 条`);
+            if (!result.ok) notes.push('历史写入失败');
+        }
+    }
+
+    const summary = notes.length > 0 ? `：${notes.join('；')}` : '';
+    showToast(`配置从 ${source} 导入成功${summary}，页面将刷新`, 'success');
 
     // 刷新页面以应用配置
     setTimeout(() => {
