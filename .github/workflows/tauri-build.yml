@@ -34,12 +34,14 @@ jobs:
 
           RELEASE_ID="$(find_id)"
           if [ -z "${RELEASE_ID}" ]; then
-            gh release create "${TAG}" \
-              --repo "${REPO}" \
-              --title "FOFA Leak Search ${TAG}" \
-              --notes "FOFA Leak Search Desktop Release" \
-              --draft
-            RELEASE_ID="$(find_id)"
+            # 用 API 创建并直接取响应里的 id。不能创建后再查列表——
+            # 草稿创建后立即查询有可见性竞态（v1.2.9 首跑因此误判创建失败）
+            RELEASE_ID="$(gh api "repos/${REPO}/releases" \
+              -f tag_name="${TAG}" \
+              -f name="FOFA Leak Search ${TAG}" \
+              -f body="FOFA Leak Search Desktop Release" \
+              -F draft=true \
+              --jq '.id')"
           fi
 
           if [ -z "${RELEASE_ID}" ]; then
