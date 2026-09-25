@@ -1005,9 +1005,16 @@ async function downloadCSV(fields, data, filename) {
 
     const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
     try {
-        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），web 模式降级 blob 下载
-        const { path } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
-        logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)' });
+        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
+        const { path, dirFallback, fallbackReason } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
+        if (fallbackReason) {
+            logWarn('download', '原生保存失败，已降级浏览器下载', { filename, reason: fallbackReason });
+            return null;
+        }
+        logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)', dirFallback: !!dirFallback });
+        if (dirFallback) {
+            showToast(`保存位置不可用，已保存到系统「下载」目录: ${path}`, 'warning');
+        }
         return path;
     } catch (e) {
         logError('download', '导出失败', { filename, error: e.message || String(e) });

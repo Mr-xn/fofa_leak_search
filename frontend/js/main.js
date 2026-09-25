@@ -409,6 +409,11 @@ window.executeSmartDownload = async () => {
 
 window.exportSmartResults = async () => {
     if (!smartMergedResults || smartMergedResults.length === 0) {
+        // 留痕：这是导出唯一的静默分支（点击后无文件且无任何日志的场景）
+        logWarn('download', '导出中止：没有可导出的数据', {
+            hasResults: !!smartMergedResults,
+            length: smartMergedResults ? smartMergedResults.length : 0
+        });
         showToast('没有可导出的数据', 'error');
         return;
     }
@@ -442,10 +447,20 @@ window.exportSmartResults = async () => {
         fields: fields.join(','), byteLength: csvContent.length
     });
     try {
-        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），web 模式降级 blob 下载
-        const { path } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
-        logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)' });
-        showToast(`已导出 ${smartMergedResults.length} 条数据${path ? ' → ' + path : ''}`, 'success');
+        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
+        const { path, dirFallback, fallbackReason } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
+        if (fallbackReason) {
+            logWarn('download', '原生保存失败，已降级浏览器下载', { filename, reason: fallbackReason });
+            showToast(`已导出 ${smartMergedResults.length} 条数据（原生保存失败已降级浏览器下载: ${fallbackReason}）`, 'warning');
+            return;
+        }
+        logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)', dirFallback: !!dirFallback });
+        if (dirFallback) {
+            logWarn('download', '保存位置不可用，已回退系统下载目录', { filename, savedPath: path });
+            showToast(`保存位置不可用，已保存到系统「下载」目录: ${path}`, 'warning');
+        } else {
+            showToast(`已导出 ${smartMergedResults.length} 条数据${path ? ' → ' + path : ''}`, 'success');
+        }
     } catch (e) {
         logError('download', '导出失败', { filename, error: e.message || String(e) });
         showToast(`导出失败: ${e.message || e}`, 'error');

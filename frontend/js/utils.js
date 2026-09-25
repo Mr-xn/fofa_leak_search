@@ -180,14 +180,23 @@ export function triggerBlobDownload(filename, blob) {
  * @param {string} filename - 文件名
  * @param {string} text - 文本内容
  * @param {string} [mimeType] - web 降级模式的 MIME 类型
- * @returns {Promise<{path: string|null}>} 桌面端返回保存路径；web 模式为 null
+ * @returns {Promise<{path: string|null, dirFallback?: boolean, fallbackReason?: string}>}
+ *          桌面端成功返回保存路径；dirFallback=设置目录不可用已回退下载目录；
+ *          降级/网页模式 path 为 null，blob 降级时带原因
  */
 export async function saveTextFile(filename, text, mimeType = 'text/plain;charset=utf-8') {
     if (isTauri()) {
         // 保存位置取设置面板配置；留空 = 系统「下载」目录（由 Rust 侧回退）
         const targetDir = (localStorage.getItem(STORAGE_KEYS.exportSaveDir) || '').trim() || null;
-        const path = await saveExportFile(filename, text, targetDir);
-        return { path };
+        try {
+            const r = await saveExportFile(filename, text, targetDir);
+            return { path: r.path, dirFallback: !!r.dir_fallback };
+        } catch (e) {
+            // 原生保存失败兜底：退回 WebView 下载，至少让文件产出；原因带回给调用方提示
+            const reason = e?.message || String(e);
+            triggerBlobDownload(filename, new Blob([text], { type: mimeType }));
+            return { path: null, fallbackReason: reason };
+        }
     }
     triggerBlobDownload(filename, new Blob([text], { type: mimeType }));
     return { path: null };

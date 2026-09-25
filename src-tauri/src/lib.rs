@@ -71,19 +71,62 @@ async fn fetch_url_raw_cmd(
     proxy::fetch_url_raw(state, url).await
 }
 
+/// 导出保存结果
+#[derive(serde::Serialize)]
+pub struct SaveExportResult {
+    /// 实际保存的绝对路径
+    pub path: String,
+    /// 设置的保存目录不可用，已回退系统「下载」目录
+    pub dir_fallback: bool,
+}
+
 /// 保存导出文件（供前端导出 CSV/日志调用）
 ///
 /// 绕开 WebView 的下载栈：macOS WKWebView / Linux WebKitGTK 对大文件 blob 下载
 /// 会静默截断或不触发（2026-09-25 双端实测），Rust 直接写盘三端行为一致。
 ///
-/// `target_dir` 为设置面板里的自定义保存目录；空/None 时回退系统「下载」目录。
+/// `target_dir` 为设置面板里的自定义保存目录；空/None 或写入失败时回退系统
+/// 「下载」目录（如 macOS 根目录只读，设成 `/` 时必须兜底而不是报错丢文件）。
 #[tauri::command]
-fn save_export_file(filename: String, content: String, target_dir: Option<String>) -> Result<String, String> {
+fn save_export_file(
+    filename: String,
+    content: String,
+    target_dir: Option<String>,
+) -> Result<SaveExportResult, String> {
     let fallback = dirs::download_dir().or_else(dirs::home_dir);
-    let dir = resolve_export_dir(target_dir.as_deref(), fallback)?;
-    let path = unique_path(&dir, &sanitize_filename(&filename));
+    let (path, dir_fallback) =
+        write_export_file(target_dir.as_deref(), fallback, &filename, &content)?;
+    Ok(SaveExportResult {
+        path: path.to_string_lossy().into_owned(),
+        dir_fallback,
+    })
+}
+
+/// 写导出文件：自定义目录优先，创建/写入失败回退兜底目录
+///
+/// 返回 (实际路径, 是否发生目录回退)。两个目录都失败才报错。
+fn write_export_file(
+    target: Option<&str>,
+    fallback: Option<std::path::PathBuf>,
+    filename: &str,
+    content: &str,
+) -> Result<(std::path::PathBuf, bool), String> {
+    let name = sanitize_filename(filename);
+    let custom = target.map(str::trim).filter(|s| !s.is_empty());
+
+    if let Some(t) = custom {
+        if let Ok(dir) = resolve_export_dir(Some(t), None) {
+            let path = unique_path(&dir, &name);
+            if std::fs::write(&path, content.as_bytes()).is_ok() {
+                return Ok((path, false));
+            }
+        }
+    }
+
+    let dir = resolve_export_dir(None, fallback)?;
+    let path = unique_path(&dir, &name);
     std::fs::write(&path, content.as_bytes()).map_err(|e| format!("写入失败: {}", e))?;
-    Ok(path.to_string_lossy().into_owned())
+    Ok((path, custom.is_some()))
 }
 
 /// 解析导出目标目录：自定义目录优先（不存在则创建），空值回退兜底目录
@@ -92,11 +135,31 @@ fn resolve_export_dir(
     fallback: Option<std::path::PathBuf>,
 ) -> Result<std::path::PathBuf, String> {
     let dir = match target.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(p) => std::path::PathBuf::from(p),
+        Some(p) => expand_user_path(p),
         None => fallback.ok_or_else(|| "无法定位下载目录".to_string())?,
     };
     std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建目录 {}: {}", dir.display(), e))?;
     Ok(dir)
+}
+
+/// 路径写法归一化：`~/x` 与 `~` 展开为家目录；相对路径按家目录解析；绝对路径原样
+fn expand_user_path(p: &str) -> std::path::PathBuf {
+    if let Some(rest) = p.strip_prefix('~') {
+        // 仅展开 `~` 与 `~/...`，不碰 `~foo`（其他用户的家目录）
+        if rest.is_empty() || rest.starts_with('/') {
+            if let Some(home) = dirs::home_dir() {
+                return home.join(rest.trim_start_matches('/'));
+            }
+        }
+    }
+    let path = std::path::Path::new(p);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        dirs::home_dir()
+            .map(|h| h.join(path))
+            .unwrap_or_else(|| path.to_path_buf())
+    }
 }
 
 /// 打开系统目录选择对话框（设置面板「选择目录」按钮；返回 None = 用户取消）
@@ -352,5 +415,75 @@ mod export_tests {
     fn resolve_export_dir_errors_without_any_dir() {
         assert!(resolve_export_dir(None, None).is_err());
         assert!(resolve_export_dir(Some(""), None).is_err());
+    }
+
+    #[test]
+    fn expand_user_path_supports_common_forms() {
+        let home = dirs::home_dir().unwrap();
+        // 绝对路径原样
+        assert_eq!(expand_user_path("/data/x"), std::path::PathBuf::from("/data/x"));
+        // ~ 展开为家目录
+        assert_eq!(expand_user_path("~/exports"), home.join("exports"));
+        assert_eq!(expand_user_path("~"), home);
+        // 相对路径按家目录解析（进程 CWD 不可依赖）
+        assert_eq!(expand_user_path("exports"), home.join("exports"));
+    }
+
+    #[test]
+    fn resolve_export_dir_expands_tilde() {
+        let home = dirs::home_dir().unwrap();
+        let dir = resolve_export_dir(Some("~/fofa_export_test_tilde"), None).unwrap();
+        assert_eq!(dir, home.join("fofa_export_test_tilde"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_export_file_uses_custom_dir_when_writable() {
+        let base = std::env::temp_dir().join(format!("fofa_w1_{}", std::process::id()));
+        let custom = base.join("custom");
+        let fb = base.join("fallback");
+        std::fs::create_dir_all(&fb).unwrap();
+
+        let (path, dir_fallback) =
+            write_export_file(Some(custom.to_str().unwrap()), Some(fb), "a.csv", "x,y").unwrap();
+        assert!(!dir_fallback);
+        assert_eq!(path.parent().unwrap(), custom.as_path());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "x,y");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn write_export_file_falls_back_when_custom_dir_unwritable() {
+        let base = std::env::temp_dir().join(format!("fofa_w2_{}", std::process::id()));
+        let custom = base.join("readonly_dir");
+        let fb = base.join("fallback");
+        std::fs::create_dir_all(&custom).unwrap();
+        std::fs::create_dir_all(&fb).unwrap();
+        // 只读目录（macOS 根目录 `/` 同理不可写）→ 必须回退而不是丢文件
+        let mut perms = std::fs::metadata(&custom).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o555);
+        std::fs::set_permissions(&custom, perms.clone()).unwrap();
+
+        let (path, dir_fallback) =
+            write_export_file(Some(custom.to_str().unwrap()), Some(fb.clone()), "a.csv", "x").unwrap();
+        assert!(dir_fallback);
+        assert_eq!(path.parent().unwrap(), fb.as_path());
+
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&custom, perms).unwrap();
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn write_export_file_without_custom_dir_is_no_fallback() {
+        let base = std::env::temp_dir().join(format!("fofa_w3_{}", std::process::id()));
+        let fb = base.join("fallback");
+        std::fs::create_dir_all(&fb).unwrap();
+
+        let (path, dir_fallback) = write_export_file(None, Some(fb.clone()), "a.csv", "x").unwrap();
+        assert!(!dir_fallback);
+        assert_eq!(path.parent().unwrap(), fb.as_path());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

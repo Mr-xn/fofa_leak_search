@@ -72,7 +72,8 @@ export async function getRequestConfig() {
  * @param {string} filename - 文件名（Rust 侧会做 basename 消毒）
  * @param {string} content - 文本内容
  * @param {string|null} [targetDir] - 自定义保存目录；null/空 = 系统「下载」目录
- * @returns {Promise<string>} 保存的绝对路径
+ * @returns {Promise<{path: string, dir_fallback: boolean}>} 实际保存路径；
+ *          dir_fallback=true 表示设置的目录不可用、已回退系统「下载」目录
  */
 export async function saveExportFile(filename, content, targetDir = null) {
     return await window.__TAURI_INTERNALS__.invoke('save_export_file', {

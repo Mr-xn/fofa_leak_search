@@ -169,9 +169,18 @@ export async function exportDiagnosticLogs() {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
     const filename = `fofa_logs_${timestamp}.json`;
     try {
-        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），web 模式降级 blob 下载
-        const { path } = await saveTextFile(filename, content, 'application/json;charset=utf-8');
-        showToast(`诊断日志已导出${path ? ' → ' + path : ''}`, 'success');
+        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
+        const { path, dirFallback, fallbackReason } = await saveTextFile(filename, content, 'application/json;charset=utf-8');
+        if (fallbackReason) {
+            logWarn('export', '原生保存失败，已降级浏览器下载', { filename, reason: fallbackReason });
+            showToast(`诊断日志已导出（原生保存失败已降级浏览器下载: ${fallbackReason}）`, 'warning');
+            return;
+        }
+        if (dirFallback) {
+            showToast(`保存位置不可用，诊断日志已保存到系统「下载」目录: ${path}`, 'warning');
+        } else {
+            showToast(`诊断日志已导出${path ? ' → ' + path : ''}`, 'success');
+        }
     } catch (e) {
         showToast(`导出失败: ${e.message || e}`, 'error');
     }
