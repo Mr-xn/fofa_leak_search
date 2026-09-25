@@ -1,6 +1,6 @@
 [package]
 name = "fofa-leak-search"
-version = "1.2.8"
+version = "1.2.9"
 description = "FOFA Leak Search Desktop Application"
 edition = "2021"
 
