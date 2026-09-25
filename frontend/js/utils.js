@@ -201,3 +201,36 @@ export async function saveTextFile(filename, text, mimeType = 'text/plain;charse
     triggerBlobDownload(filename, new Blob([text], { type: mimeType }));
     return { path: null };
 }
+
+/**
+ * 拼装导出 CSV 文本（智能下载 / 结果页导出共用）
+ *
+ * 格式与既有导出一致：BOM +（可选）查询元信息行 + 表头 + 数据行，单元格全部加引号。
+ *
+ * @param {Array<Array>} rows - 数据行
+ * @param {Array<string>} fields - 字段名（表头顺序）
+ * @param {Object} [opts]
+ * @param {boolean} [opts.includeQuery] - 首行插入查询元信息行
+ * @param {string} [opts.query] - 查询语句（includeQuery 时用）
+ * @param {string} [opts.exportTime] - 导出时间（默认当前时间，测试可注入）
+ * @param {Object} [opts.fieldLabels] - 表头显示名映射（结果页中文列名）
+ * @returns {string} CSV 文本（含 BOM）
+ */
+export function buildCsvText(rows, fields, opts = {}) {
+    const BOM = '﻿';
+    const header = fields
+        .map(f => `"${(opts.fieldLabels && opts.fieldLabels[f]) || f}"`)
+        .join(',');
+    let metaRow = '';
+    if (opts.includeQuery) {
+        const queryStr = opts.query || '(无)';
+        const exportTime = opts.exportTime || new Date().toLocaleString('zh-CN', { hour12: false });
+        const escapedQuery = String(queryStr).replace(/"/g, '""');
+        metaRow = `"查询: ${escapedQuery}    导出时间: ${exportTime}    条数: ${rows.length}",`
+            + fields.slice(1).map(() => '').join(',') + '\n';
+    }
+    const body = rows.map(row =>
+        row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    return BOM + metaRow + header + '\n' + body;
+}

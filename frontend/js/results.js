@@ -1,7 +1,7 @@
 // js/results.js - 结果展示（表格、排序、分页、下载）
 
 import { state, FIELD_LABELS, STORAGE_KEYS } from './config.js';
-import { escapeHtml, formatNumber, showToast, showConfirm, saveTextFile } from './utils.js';
+import { escapeHtml, formatNumber, showToast, showConfirm, saveTextFile, buildCsvText } from './utils.js';
 import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls, incrementDataCount } from './storage.js';
@@ -983,27 +983,11 @@ async function fetchWithRetry(query, page, pageSize, fields, maxRetries) {
 // 生成 CSV 并下载
 async function downloadCSV(fields, data, filename) {
     logInfo('download', '导出 CSV', { filename, rowCount: data.length, fields: fields.join(',') });
-    const BOM = '﻿';
-    const header = fields.map(f => `"${FIELD_LABELS[f] || f}"`).join(',');
-
-    // 根据设置决定是否添加查询元数据行
+    // CSV 拼装统一走 buildCsvText（与智能下载导出共用同一实现）
     const includeQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) === 'true';
-    let metaRow = '';
-    if (includeQuery) {
-        const queryStr = state.currentQuery || '(无)';
-        const exportTime = new Date().toLocaleString('zh-CN', { hour12: false });
-        const escapedQuery = String(queryStr).replace(/"/g, '""');
-        metaRow = `"查询: ${escapedQuery}    导出时间: ${exportTime}    条数: ${data.length}",` + fields.slice(1).map(() => '').join(',') + '\n';
-    }
-
-    const rows = data.map(row =>
-        row.map(cell => {
-            const value = cell ?? '';
-            return `"${String(value).replace(/"/g, '""')}"`;
-        }).join(',')
-    );
-
-    const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
+    const csvContent = buildCsvText(data, fields, {
+        includeQuery, query: state.currentQuery, fieldLabels: FIELD_LABELS
+    });
     try {
         // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
         const { path, dirFallback, fallbackReason } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');

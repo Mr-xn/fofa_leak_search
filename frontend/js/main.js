@@ -1,7 +1,7 @@
 // js/main.js - 主入口（初始化、事件绑定）
 
 import { state, STORAGE_KEYS, APP_VERSION } from './config.js';
-import { showToast, debounce, escapeHtml, saveTextFile } from './utils.js';
+import { showToast, debounce, escapeHtml, saveTextFile, buildCsvText } from './utils.js';
 import { initTauriBridge, isTauri, openUrl, pickExportDir } from './tauri-bridge.js';
 import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as clearAllCacheStorage, getCachedUserInfo, setCachedUserInfo, getUsageStats, getHistoryFilters } from './storage.js';
 import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey,
@@ -24,6 +24,23 @@ import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, planQu
 import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
 import { getSelectedFields } from './ui.js';
 import { setLoggingEnabled, setLogLevel, info as logInfo, warn as logWarn, error as logError } from './logger.js';
+
+// ==================== 全局异常记录器（飞行记录器） ====================
+// 任何未捕获的同步异常/Promise 拒绝都进诊断日志，杜绝"点了没反应"的静默失败
+window.addEventListener('error', (e) => {
+    try {
+        logError('global', '未捕获异常', { message: e.message, file: e.filename, line: e.lineno, col: e.colno });
+    } catch { /* 日志不可用时不再抛 */ }
+});
+window.addEventListener('unhandledrejection', (e) => {
+    try {
+        const r = e.reason;
+        logError('global', '未处理的 Promise 异常', {
+            reason: (r && r.message) ? r.message : String(r),
+            stack: r && r.stack ? String(r.stack).slice(0, 300) : undefined
+        });
+    } catch { /* 日志不可用时不再抛 */ }
+});
 
 // ==================== 全局函数导出 ====================
 // HTML 中的 onclick 需要访问这些函数
@@ -405,53 +422,42 @@ window.executeSmartDownload = async () => {
     document.getElementById('smartStartBtn').disabled = false;
 
     showToast(`智能下载完成: ${result.stats.uniqueCount.toLocaleString()} 条数据`, 'success');
+
+    // 执行完成自动保存 CSV（无需手动点「导出 CSV」；按钮保留可重新导出）
+    if (result.mergedResults && result.mergedResults.length > 0) {
+        await window.exportSmartResults(true);
+    }
 };
 
-window.exportSmartResults = async () => {
+window.exportSmartResults = async (auto = false) => {
     if (!smartMergedResults || smartMergedResults.length === 0) {
         // 留痕：这是导出唯一的静默分支（点击后无文件且无任何日志的场景）
         logWarn('download', '导出中止：没有可导出的数据', {
+            auto,
             hasResults: !!smartMergedResults,
             length: smartMergedResults ? smartMergedResults.length : 0
         });
-        showToast('没有可导出的数据', 'error');
+        if (!auto) showToast('没有可导出的数据', 'error');
         return;
     }
 
-    const fields = getSelectedFields().split(',');
-    const BOM = '﻿';
-    const header = fields.map(f => `"${f}"`).join(',');
-
-    // 根据设置决定是否添加查询元数据行
-    const includeQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) === 'true';
-    let metaRow = '';
-    if (includeQuery) {
-        const queryStr = state.currentQuery || '(无)';
-        const exportTime = new Date().toLocaleString('zh-CN', { hour12: false });
-        const escapedQuery = String(queryStr).replace(/"/g, '""');
-        metaRow = `"查询: ${escapedQuery}    导出时间: ${exportTime}    条数: ${smartMergedResults.length}",` + fields.slice(1).map(() => '').join(',') + '\n';
-    }
-
-    const rows = smartMergedResults.map(row =>
-        row.map(cell => {
-            const value = cell ?? '';
-            return `"${String(value).replace(/"/g, '""')}"`;
-        }).join(',')
-    );
-
-    const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    const filename = `fofa_smart_${smartMergedResults.length}条_${timestamp}.csv`;
-    logInfo('download', '智能下载导出 CSV', {
-        filename, rowCount: smartMergedResults.length,
-        fields: fields.join(','), byteLength: csvContent.length
-    });
     try {
+        const fields = getSelectedFields().split(',');
+        const includeQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) === 'true';
+        // CSV 拼装统一走 buildCsvText（与结果页导出共用同一实现）
+        const csvContent = buildCsvText(smartMergedResults, fields, { includeQuery, query: state.currentQuery });
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+        const filename = `fofa_smart_${smartMergedResults.length}条_${timestamp}.csv`;
+        logInfo('download', '智能下载导出 CSV', {
+            auto, filename, rowCount: smartMergedResults.length,
+            fields: fields.join(','), byteLength: csvContent.length
+        });
         // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
         const { path, dirFallback, fallbackReason } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
+        const doneLabel = auto ? '已自动保存' : '已导出';
         if (fallbackReason) {
             logWarn('download', '原生保存失败，已降级浏览器下载', { filename, reason: fallbackReason });
-            showToast(`已导出 ${smartMergedResults.length} 条数据（原生保存失败已降级浏览器下载: ${fallbackReason}）`, 'warning');
+            showToast(`${doneLabel} ${smartMergedResults.length} 条数据（原生保存失败已降级浏览器下载: ${fallbackReason}）`, 'warning');
             return;
         }
         logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)', dirFallback: !!dirFallback });
@@ -459,10 +465,10 @@ window.exportSmartResults = async () => {
             logWarn('download', '保存位置不可用，已回退系统下载目录', { filename, savedPath: path });
             showToast(`保存位置不可用，已保存到系统「下载」目录: ${path}`, 'warning');
         } else {
-            showToast(`已导出 ${smartMergedResults.length} 条数据${path ? ' → ' + path : ''}`, 'success');
+            showToast(`${doneLabel} ${smartMergedResults.length} 条数据${path ? ' → ' + path : ''}`, 'success');
         }
     } catch (e) {
-        logError('download', '导出失败', { filename, error: e.message || String(e) });
+        logError('download', '导出失败', { auto, error: e.message || String(e) });
         showToast(`导出失败: ${e.message || e}`, 'error');
     }
 };
