@@ -1,8 +1,8 @@
 // js/main.js - 主入口（初始化、事件绑定）
 
 import { state, STORAGE_KEYS, APP_VERSION } from './config.js';
-import { showToast, debounce, escapeHtml } from './utils.js';
-import { initTauriBridge, isTauri, openUrl } from './tauri-bridge.js';
+import { showToast, debounce, escapeHtml, saveTextFile } from './utils.js';
+import { initTauriBridge, isTauri, openUrl, pickExportDir } from './tauri-bridge.js';
 import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as clearAllCacheStorage, getCachedUserInfo, setCachedUserInfo, getUsageStats, getHistoryFilters } from './storage.js';
 import { showApiKeyModal, closeApiKeyModal, togglePasswordVisibility, saveApiKey,
          showCacheManager, closeCacheModal, initFieldTags, closeUserInfo, exportCacheData,
@@ -407,7 +407,7 @@ window.executeSmartDownload = async () => {
     showToast(`智能下载完成: ${result.stats.uniqueCount.toLocaleString()} 条数据`, 'success');
 };
 
-window.exportSmartResults = () => {
+window.exportSmartResults = async () => {
     if (!smartMergedResults || smartMergedResults.length === 0) {
         showToast('没有可导出的数据', 'error');
         return;
@@ -435,18 +435,37 @@ window.exportSmartResults = () => {
     );
 
     const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    link.download = `fofa_smart_${smartMergedResults.length}条_${timestamp}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const filename = `fofa_smart_${smartMergedResults.length}条_${timestamp}.csv`;
+    logInfo('download', '智能下载导出 CSV', {
+        filename, rowCount: smartMergedResults.length,
+        fields: fields.join(','), byteLength: csvContent.length
+    });
+    try {
+        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），web 模式降级 blob 下载
+        const { path } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
+        logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)' });
+        showToast(`已导出 ${smartMergedResults.length} 条数据${path ? ' → ' + path : ''}`, 'success');
+    } catch (e) {
+        logError('download', '导出失败', { filename, error: e.message || String(e) });
+        showToast(`导出失败: ${e.message || e}`, 'error');
+    }
+};
 
-    showToast(`已导出 ${smartMergedResults.length} 条数据`, 'success');
+// 设置面板「选择目录」：系统目录选择对话框（仅桌面版）
+window.chooseExportDir = async () => {
+    try {
+        const dir = await pickExportDir();
+        if (!dir) return; // 用户取消
+        const input = document.getElementById('exportSaveDir');
+        if (input) input.value = dir;
+        localStorage.setItem(STORAGE_KEYS.exportSaveDir, dir);
+        showToast(`保存位置已设置: ${dir}`, 'success');
+        logInfo('settings', `导出保存位置: ${dir}`);
+    } catch (e) {
+        logError('settings', '选择目录失败', { error: e.message || String(e) });
+        showToast(`选择目录失败: ${e.message || e}`, 'error');
+    }
 };
 
 function setPhaseIcon(id, status, text) {
@@ -1191,6 +1210,23 @@ async function initApp() {
         exportIncludeQueryToggle.addEventListener('change', () => {
             localStorage.setItem(STORAGE_KEYS.exportIncludeQuery, exportIncludeQueryToggle.checked);
         });
+    }
+
+    // 导出保存位置（留空 = 系统「下载」目录）
+    const exportSaveDirInput = document.getElementById('exportSaveDir');
+    if (exportSaveDirInput) {
+        exportSaveDirInput.value = localStorage.getItem(STORAGE_KEYS.exportSaveDir) || '';
+        exportSaveDirInput.addEventListener('change', () => {
+            const v = exportSaveDirInput.value.trim();
+            if (v) localStorage.setItem(STORAGE_KEYS.exportSaveDir, v);
+            else localStorage.removeItem(STORAGE_KEYS.exportSaveDir);
+            logInfo('settings', `导出保存位置: ${v || '系统「下载」目录（默认）'}`);
+        });
+    }
+    // web 模式没有原生目录选择
+    const pickExportDirBtn = document.getElementById('pickExportDirBtn');
+    if (pickExportDirBtn && !isTauri()) {
+        pickExportDirBtn.style.display = 'none';
     }
 
     // 诊断日志设置

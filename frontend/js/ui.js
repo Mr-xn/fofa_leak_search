@@ -1,7 +1,7 @@
 // js/ui.js - UI 交互（弹窗、提示、字段选择）
 
 import { state, STORAGE_KEYS, FIELD_LABELS, DEFAULT_FIELDS, FIELDS_CONFIG, FILTERS_CONFIG, VIP_LEVEL_MAP } from './config.js';
-import { showToast, showConfirm, formatCacheExpiry, escapeHtml } from './utils.js';
+import { showToast, showConfirm, formatCacheExpiry, escapeHtml, saveTextFile } from './utils.js';
 import { clearAllCache, getCacheStats, getCachedQueries, getAllCachedData, exportToCSV, exportToJSON } from './storage.js';
 import { setProxyConfig, getProxyConfig as getTauriProxyConfig, setRequestConfig, getRequestConfig } from './tauri-bridge.js';
 import { getLogs, clearLogs, exportLogs, isLoggingEnabled, getLogLevel, info as logInfo, warn as logWarn } from './logger.js';
@@ -164,19 +164,17 @@ export function clearDiagnosticLogs() {
     showToast('诊断日志已清空', 'success');
 }
 
-export function exportDiagnosticLogs() {
+export async function exportDiagnosticLogs() {
     const content = exportLogs();
-    const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    link.href = url;
-    link.download = `fofa_logs_${timestamp}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast('诊断日志已导出', 'success');
+    const filename = `fofa_logs_${timestamp}.json`;
+    try {
+        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），web 模式降级 blob 下载
+        const { path } = await saveTextFile(filename, content, 'application/json;charset=utf-8');
+        showToast(`诊断日志已导出${path ? ' → ' + path : ''}`, 'success');
+    } catch (e) {
+        showToast(`导出失败: ${e.message || e}`, 'error');
+    }
 }
 
 export function saveSettingsApiKey() {

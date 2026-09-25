@@ -1,6 +1,7 @@
 // js/utils.js - 工具函数
 
 import { STORAGE_KEYS } from './config.js';
+import { isTauri, saveExportFile } from './tauri-bridge.js';
 
 // ==================== Toast 提示 ====================
 export function showToast(message, type = 'info') {
@@ -139,4 +140,55 @@ export function getCacheExpiry() {
         case 'months': return value * 30 * 24 * 60 * 60 * 1000;
         default: return 365 * 24 * 60 * 60 * 1000;
     }
+}
+
+// ==================== Blob 文件下载 ====================
+
+/** blob URL 延迟释放时间（毫秒） */
+const BLOB_REVOKE_DELAY_MS = 3000;
+
+/**
+ * 触发文件下载（Blob → <a download> 点击）
+ *
+ * 关键：URL.revokeObjectURL 必须延迟释放。macOS WKWebView 的下载是异步读取
+ * blob URL，click() 后立即 revoke 会让大文件（MB 级 CSV）下载被静默截断
+ * （小文件常在释放前读完，所以症状只在大导出上出现）。
+ *
+ * @param {string} filename - 保存文件名
+ * @param {Blob} blob - 文件内容
+ * @returns {string} 创建的 object URL（供诊断）
+ */
+export function triggerBlobDownload(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), BLOB_REVOKE_DELAY_MS);
+    return url;
+}
+
+/**
+ * 保存文本文件（导出统一入口）
+ *
+ * - 桌面端（Tauri）：Rust 原生写盘到系统下载目录，绕开 WebView 下载栈
+ *   （macOS WKWebView / Linux WebKitGTK 的大文件 blob 下载会静默失败）
+ * - web 模式：降级为 blob 下载（浏览器下载栈可靠）
+ *
+ * @param {string} filename - 文件名
+ * @param {string} text - 文本内容
+ * @param {string} [mimeType] - web 降级模式的 MIME 类型
+ * @returns {Promise<{path: string|null}>} 桌面端返回保存路径；web 模式为 null
+ */
+export async function saveTextFile(filename, text, mimeType = 'text/plain;charset=utf-8') {
+    if (isTauri()) {
+        // 保存位置取设置面板配置；留空 = 系统「下载」目录（由 Rust 侧回退）
+        const targetDir = (localStorage.getItem(STORAGE_KEYS.exportSaveDir) || '').trim() || null;
+        const path = await saveExportFile(filename, text, targetDir);
+        return { path };
+    }
+    triggerBlobDownload(filename, new Blob([text], { type: mimeType }));
+    return { path: null };
 }

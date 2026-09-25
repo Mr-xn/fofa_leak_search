@@ -48,6 +48,7 @@ export const STORAGE_KEYS = {
     usage: 'fofa_usage',  // 月度使用统计
     downloadRange: 'fofa_download_range',  // 下载页码范围设置
     exportIncludeQuery: 'fofa_export_include_query',  // 导出 CSV 时包含查询语句
+    exportSaveDir: 'fofa_export_save_dir',  // 导出文件保存目录（空 = 系统「下载」目录）
     proxyEnabled: 'fofa_proxy_enabled',  // 代理开关
     proxyHost: 'fofa_proxy_host',       // 代理主机
     proxyPort: 'fofa_proxy_port',       // 代理端口

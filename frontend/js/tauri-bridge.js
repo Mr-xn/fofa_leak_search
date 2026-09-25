@@ -68,6 +68,29 @@ export async function getRequestConfig() {
 }
 
 /**
+ * 保存导出文件（Rust 原生写盘，绕开 WebView 下载栈）
+ * @param {string} filename - 文件名（Rust 侧会做 basename 消毒）
+ * @param {string} content - 文本内容
+ * @param {string|null} [targetDir] - 自定义保存目录；null/空 = 系统「下载」目录
+ * @returns {Promise<string>} 保存的绝对路径
+ */
+export async function saveExportFile(filename, content, targetDir = null) {
+    return await window.__TAURI_INTERNALS__.invoke('save_export_file', {
+        filename: filename || 'export.txt',
+        content: content || '',
+        targetDir: targetDir || null
+    });
+}
+
+/**
+ * 打开系统目录选择对话框
+ * @returns {Promise<string|null>} 选中的目录路径；null = 用户取消
+ */
+export async function pickExportDir() {
+    return await window.__TAURI_INTERNALS__.invoke('pick_export_dir');
+}
+
+/**
  * 初始化 Tauri 环境适配
  * 检测 Tauri 环境，获取 Rust 代理端口，返回 API 基础 URL
  * @returns {Promise<string>} API 基础 URL（Tauri 模式返回 'http://127.0.0.1:PORT'，Web 模式返回空字符串）

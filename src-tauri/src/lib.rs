@@ -71,6 +71,90 @@ async fn fetch_url_raw_cmd(
     proxy::fetch_url_raw(state, url).await
 }
 
+/// 保存导出文件（供前端导出 CSV/日志调用）
+///
+/// 绕开 WebView 的下载栈：macOS WKWebView / Linux WebKitGTK 对大文件 blob 下载
+/// 会静默截断或不触发（2026-09-25 双端实测），Rust 直接写盘三端行为一致。
+///
+/// `target_dir` 为设置面板里的自定义保存目录；空/None 时回退系统「下载」目录。
+#[tauri::command]
+fn save_export_file(filename: String, content: String, target_dir: Option<String>) -> Result<String, String> {
+    let fallback = dirs::download_dir().or_else(dirs::home_dir);
+    let dir = resolve_export_dir(target_dir.as_deref(), fallback)?;
+    let path = unique_path(&dir, &sanitize_filename(&filename));
+    std::fs::write(&path, content.as_bytes()).map_err(|e| format!("写入失败: {}", e))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// 解析导出目标目录：自定义目录优先（不存在则创建），空值回退兜底目录
+fn resolve_export_dir(
+    target: Option<&str>,
+    fallback: Option<std::path::PathBuf>,
+) -> Result<std::path::PathBuf, String> {
+    let dir = match target.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(p) => std::path::PathBuf::from(p),
+        None => fallback.ok_or_else(|| "无法定位下载目录".to_string())?,
+    };
+    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建目录 {}: {}", dir.display(), e))?;
+    Ok(dir)
+}
+
+/// 打开系统目录选择对话框（设置面板「选择目录」按钮；返回 None = 用户取消）
+#[tauri::command]
+async fn pick_export_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog().file().blocking_pick_folder()
+    })
+    .await
+    .map_err(|e| format!("选择目录失败: {}", e))?;
+    Ok(picked.and_then(dialog_path_to_string))
+}
+
+/// dialog FilePath → 字符串路径
+fn dialog_path_to_string(fp: tauri_plugin_dialog::FilePath) -> Option<String> {
+    use tauri_plugin_dialog::FilePath;
+    match fp {
+        FilePath::Path(p) => Some(p.to_string_lossy().into_owned()),
+        FilePath::Url(u) => u
+            .to_file_path()
+            .ok()
+            .map(|p| p.to_string_lossy().into_owned()),
+    }
+}
+
+/// 文件名消毒：只保留 basename，防路径穿越
+fn sanitize_filename(name: &str) -> String {
+    let base = std::path::Path::new(name)
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let base = base.trim();
+    if base.is_empty() || base == "." || base == ".." {
+        "export.txt".to_string()
+    } else {
+        base.to_string()
+    }
+}
+
+/// 目标已存在时追加 " (n)"，避免覆盖已有导出
+fn unique_path(dir: &std::path::Path, filename: &str) -> std::path::PathBuf {
+    let candidate = dir.join(filename);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let p = std::path::Path::new(filename);
+    let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| filename.to_string());
+    let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    for n in 1..1000 {
+        let c = dir.join(format!("{} ({}){}", stem, n, ext));
+        if !c.exists() {
+            return c;
+        }
+    }
+    candidate
+}
+
 /// 用系统默认浏览器打开 URL（健壮版）
 /// 优先级: open::that() > 系统命令 > 错误
 #[tauri::command]
@@ -158,6 +242,7 @@ pub fn run() {
     println!("[Tauri] Proxy server running on port {}", port);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(ProxyPort {
             port: Mutex::new(port),
         })
@@ -201,7 +286,71 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, fetch_url_raw_cmd, dedup::dedup_results, dedup::dedup_single])
+        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, fetch_url_raw_cmd, save_export_file, pick_export_dir, dedup::dedup_results, dedup::dedup_single])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_filename_strips_path_components() {
+        assert_eq!(sanitize_filename("../../etc/passwd"), "passwd");
+        assert_eq!(sanitize_filename("/a/b/evil.csv"), "evil.csv");
+        assert_eq!(sanitize_filename("plain.csv"), "plain.csv");
+    }
+
+    #[test]
+    fn sanitize_filename_rejects_empty_and_dots() {
+        assert_eq!(sanitize_filename(".."), "export.txt");
+        assert_eq!(sanitize_filename("   "), "export.txt");
+        assert_eq!(sanitize_filename(""), "export.txt");
+    }
+
+    #[test]
+    fn unique_path_appends_counter_instead_of_overwriting() {
+        let dir = std::env::temp_dir().join(format!("fofa_export_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let p1 = unique_path(&dir, "a.csv");
+        assert_eq!(p1.file_name().unwrap().to_string_lossy(), "a.csv");
+        std::fs::write(&p1, "x").unwrap();
+
+        let p2 = unique_path(&dir, "a.csv");
+        assert_eq!(p2.file_name().unwrap().to_string_lossy(), "a (1).csv");
+        std::fs::write(&p2, "x").unwrap();
+
+        let p3 = unique_path(&dir, "a.csv");
+        assert_eq!(p3.file_name().unwrap().to_string_lossy(), "a (2).csv");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_export_dir_prefers_custom_and_creates_it() {
+        let base = std::env::temp_dir().join(format!("fofa_dir_test_{}", std::process::id()));
+        let target = base.join("nested/exports");
+        let dir = resolve_export_dir(Some(target.to_str().unwrap()), Some(base.join("fallback"))).unwrap();
+        assert_eq!(dir, target);
+        assert!(dir.is_dir());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_export_dir_blank_falls_back() {
+        let base = std::env::temp_dir().join(format!("fofa_dir_test2_{}", std::process::id()));
+        let fb = base.join("Downloads");
+        std::fs::create_dir_all(&fb).unwrap();
+        let dir = resolve_export_dir(Some("   "), Some(fb.clone())).unwrap();
+        assert_eq!(dir, fb);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_export_dir_errors_without_any_dir() {
+        assert!(resolve_export_dir(None, None).is_err());
+        assert!(resolve_export_dir(Some(""), None).is_err());
+    }
 }

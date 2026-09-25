@@ -1,7 +1,7 @@
 // js/results.js - 结果展示（表格、排序、分页、下载）
 
 import { state, FIELD_LABELS, STORAGE_KEYS } from './config.js';
-import { escapeHtml, formatNumber, showToast, showConfirm } from './utils.js';
+import { escapeHtml, formatNumber, showToast, showConfirm, saveTextFile } from './utils.js';
 import { getSelectedFields } from './ui.js';
 import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls, incrementDataCount } from './storage.js';
@@ -487,7 +487,7 @@ export async function openAllLinks() {
 }
 
 // 下载当前页数据
-export function downloadCurrentPage() {
+export async function downloadCurrentPage() {
     if (!state.results || state.results.length === 0) {
         showToast('没有可下载的数据', 'error');
         return;
@@ -497,9 +497,9 @@ export function downloadCurrentPage() {
     const data = state.results;
     const filename = `fofa_page${state.currentPage}_${getTimestamp()}.csv`;
 
-    downloadCSV(fields, data, filename);
+    const savedPath = await downloadCSV(fields, data, filename);
     incrementDownloads();
-    showToast(`已下载第 ${state.currentPage} 页数据 (${data.length} 条)`, 'success');
+    showToast(`已下载第 ${state.currentPage} 页数据 (${data.length} 条)${savedPath ? ' → ' + savedPath : ''}`, 'success');
 }
 
 // 下载所有页数据（通过 API 获取）
@@ -837,7 +837,7 @@ async function downloadAllAtOnce(size, fields) {
 
             const fieldList = fields.split(',');
             const filename = `fofa_all_${data.results.length}条_${getTimestamp()}.csv`;
-            downloadCSV(fieldList, data.results, filename);
+            await downloadCSV(fieldList, data.results, filename);
             incrementDownloads();
             incrementDataCount(data.results.length);
 
@@ -934,7 +934,7 @@ async function downloadPageByPage(startPage, endPage, pageSize, fields, concurre
 
     const fieldList = fields.split(',');
     const filename = `fofa_pages${startPage}-${endPage}_${allResults.length}条_${getTimestamp()}.csv`;
-    downloadCSV(fieldList, allResults, filename);
+    await downloadCSV(fieldList, allResults, filename);
     incrementDownloads();
     incrementDataCount(allResults.length);
 
@@ -981,7 +981,7 @@ async function fetchWithRetry(query, page, pageSize, fields, maxRetries) {
 }
 
 // 生成 CSV 并下载
-function downloadCSV(fields, data, filename) {
+async function downloadCSV(fields, data, filename) {
     logInfo('download', '导出 CSV', { filename, rowCount: data.length, fields: fields.join(',') });
     const BOM = '﻿';
     const header = fields.map(f => `"${FIELD_LABELS[f] || f}"`).join(',');
@@ -1004,15 +1004,16 @@ function downloadCSV(fields, data, filename) {
     );
 
     const csvContent = BOM + metaRow + header + '\n' + rows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+        // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），web 模式降级 blob 下载
+        const { path } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
+        logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)' });
+        return path;
+    } catch (e) {
+        logError('download', '导出失败', { filename, error: e.message || String(e) });
+        showToast(`导出失败: ${e.message || e}`, 'error');
+        return null;
+    }
 }
 
 // 获取时间戳

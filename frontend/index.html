@@ -355,6 +355,18 @@
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
+
+                    <!-- 导出文件保存位置 -->
+                    <div class="settings-field" style="margin-top: 12px;">
+                        <label>保存位置（导出文件）</label>
+                        <p class="settings-toggle-desc">桌面版导出 CSV/日志的保存目录；留空则保存到系统「下载」目录</p>
+                        <div style="display: flex; gap: 6px; margin-top: 6px;">
+                            <input type="text" class="settings-input" id="exportSaveDir"
+                                   placeholder="系统「下载」目录（默认）" style="flex: 1;">
+                            <button class="btn btn-ghost btn-sm" id="pickExportDirBtn"
+                                    onclick="chooseExportDir()" title="选择目录" style="flex-shrink: 0;">选择目录</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 更新设置 -->
