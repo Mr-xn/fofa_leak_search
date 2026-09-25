@@ -164,7 +164,7 @@ export async function fetchResults() {
 
     const pageSize = document.getElementById('pageSize').value;
     const fields = getSelectedFields();
-    const cacheKey = getCacheKey(state.currentQuery, state.currentPage, pageSize, fields);
+    const cacheKey = getCacheKey(state.currentQuery, state.currentPage, pageSize, fields, state.searchFull || false);
     logInfo('search', '开始获取搜索结果', {
         query: state.currentQuery,
         page: state.currentPage,

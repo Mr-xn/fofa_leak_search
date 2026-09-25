@@ -32,8 +32,12 @@ export function initIndexedDB() {
 }
 
 // ==================== 生成缓存键 ====================
-export function getCacheKey(query, page, size, fields) {
-    const raw = `${query}|${page}|${size}|${fields}`;
+/**
+ * @param {boolean} [full=false] - 数据范围（true=全部数据）。必须参与缓存键，
+ *                                 否则切换数据范围会命中旧口径缓存
+ */
+export function getCacheKey(query, page, size, fields, full = false) {
+    const raw = `${query}|${page}|${size}|${fields}|full=${full ? 1 : 0}`;
     return btoa(unescape(encodeURIComponent(raw)));
 }
 
