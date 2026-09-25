@@ -221,6 +221,7 @@ window.startSmartDownload = async () => {
     // 显示分析结果 + 配额信息
     let analyzeHtml = `<div class="query-line">${escapeHtml(state.currentQuery)}</div>`;
     analyzeHtml += `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">`;
+    analyzeHtml += `<span><strong>数据范围：</strong>${state.searchFull ? '全部数据' : '近一年'}</span>`;
     analyzeHtml += `<span><strong>数据量：</strong>${stats.size.toLocaleString()} 条</span>`;
     analyzeHtml += `<span><strong>单次限制：</strong>${freeLimit.toLocaleString()} 条</span>`;
     analyzeHtml += `<span><strong>需要拆分：</strong>${maxTotalLimit > freeLimit ? '至少 ' + Math.ceil(maxTotalLimit / freeLimit) + ' 步' : '否'}</span>`;

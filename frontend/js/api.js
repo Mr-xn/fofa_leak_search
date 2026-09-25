@@ -80,11 +80,20 @@ export async function fetchSearchResults(query, page, size, fields, full = false
 }
 
 // ==================== 统计聚合 ====================
-export async function fetchStats(query, fields) {
+/**
+ * 统计聚合查询
+ * @param {string} query - FOFA 查询语句
+ * @param {string} [fields] - 聚合字段，逗号分隔
+ * @param {boolean} [full=false] - true = 全部数据（FOFA 默认只统计近一年）
+ */
+export async function fetchStats(query, fields, full = false) {
     const qbase64 = btoa(unescape(encodeURIComponent(query)));
     let url = `${state.apiBaseUrl}/api/search/stats?key=${state.apiKey}&qbase64=${qbase64}`;
     if (fields) {
         url += `&fields=${fields}`;
+    }
+    if (full) {
+        url += '&full=true';
     }
     const response = await fetchWithTimeout(url);
     return response.json();
@@ -104,11 +113,16 @@ export async function fetchStats(query, fields) {
  * 超限则二分拆分，避免执行时翻页扣 F 点。
  *
  * @param {string} query - FOFA 查询语句
+ * @param {boolean} [full=false] - true = 全部数据（FOFA 默认只搜近一年）；
+ *                                 实测 full=true 时 size=1 仍 consumed_fpoint=0
  * @returns {Promise<{size: number, error: boolean, errmsg: string, consumedFpoint: number}>}
  */
-export async function fetchSearchSize(query) {
+export async function fetchSearchSize(query, full = false) {
     const qbase64 = btoa(unescape(encodeURIComponent(query)));
-    const url = `${state.apiBaseUrl}/api/search/all?key=${state.apiKey}&qbase64=${qbase64}&page=1&size=1&fields=link`;
+    let url = `${state.apiBaseUrl}/api/search/all?key=${state.apiKey}&qbase64=${qbase64}&page=1&size=1&fields=link`;
+    if (full) {
+        url += '&full=true';
+    }
     const response = await fetchWithTimeout(url);
     const data = await response.json();
     logInfo('api', 'fetchSearchSize 探测', {

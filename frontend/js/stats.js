@@ -49,8 +49,8 @@ export async function loadStats() {
     const statsContent = document.getElementById('statsContent');
     if (!statsContent) return;
 
-    // 检查缓存
-    const queryKey = state.currentQuery;
+    // 检查缓存（缓存键含数据范围：同一查询的「全部数据」与「近一年」口径不同，不能共用缓存）
+    const queryKey = `${state.currentQuery}|full=${state.searchFull || false}`;
     const cached = statsCache.get(queryKey);
     if (cached && (Date.now() - cached.timestamp) < STATS_CACHE_TTL) {
         renderStats(cached.data);
@@ -62,7 +62,8 @@ export async function loadStats() {
     showStatsPanel();
 
     try {
-        const data = await fetchStats(state.currentQuery, STATS_FIELDS.join(','));
+        // 数据范围跟随结果页（state.searchFull），FOFA stats 默认只统计近一年
+        const data = await fetchStats(state.currentQuery, STATS_FIELDS.join(','), state.searchFull || false);
 
         if (data.error) {
             statsContent.innerHTML = `<div class="stats-error">加载失败: ${escapeHtml(data.errmsg)}</div>`;

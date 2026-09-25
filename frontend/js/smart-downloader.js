@@ -119,9 +119,9 @@ export function getFreeLimit() {
  * @returns {Promise<number>} 匹配总数，错误时返回 -1
  */
 export async function estimateQuerySize(query) {
-    logInfo('smartdl', '开始估算查询结果数量', { query });
+    logInfo('smartdl', '开始估算查询结果数量', { query, full: state.searchFull || false });
     try {
-        const result = await fetchStats(query, '');
+        const result = await fetchStats(query, '', state.searchFull || false);
         incrementApiCalls();
         if (result.error) {
             logWarn('smartdl', '估算查询结果数量失败（API 错误）', { query, errmsg: result.errmsg });
@@ -140,14 +140,20 @@ export async function estimateQuerySize(query) {
 
 /**
  * 获取查询在各维度上的分布统计
+ *
+ * 数据范围跟随 state.searchFull（结果页的「数据范围」设置）：
+ * FOFA stats 默认只统计近一年，必须带 full=true 才与全部数据的结果页同口径，
+ * 否则会出现「结果 1.6 万、分析 700」的错位。
+ *
  * @param {string} query - FOFA 查询语句
  * @returns {Promise<Object|null>} 统计数据对象（含 size、distinct、aggs），错误时返回 null
  */
 export async function analyzeDimensions(query) {
-    logInfo('smartdl', '开始分析查询维度分布', { query, fields: PLANNABLE_FIELDS.join(',') });
+    const full = state.searchFull || false;
+    logInfo('smartdl', '开始分析查询维度分布', { query, fields: PLANNABLE_FIELDS.join(','), full });
     try {
         const fields = PLANNABLE_FIELDS.join(',');
-        const result = await fetchStats(query, fields);
+        const result = await fetchStats(query, fields, full);
         incrementApiCalls();
         if (result.error) {
             logWarn('smartdl', '维度分析失败（API 错误）', { query, errmsg: result.errmsg });
@@ -310,7 +316,8 @@ async function fetchSearchSizeForProbe(query) {
 
     for (let attempt = 1; attempt <= PROBE_MAX_RETRIES; attempt++) {
         try {
-            const result = await fetchSearchSize(query);
+            // 数据范围跟随 state.searchFull，与结果页同口径（FOFA 默认只搜近一年）
+            const result = await fetchSearchSize(query, state.searchFull || false);
             incrementApiCalls();
 
             if (result.error && isRateLimitError(result.errmsg)) {
@@ -739,7 +746,7 @@ async function fetchStatsForProbe(query, isFirstCall = false) {
 
     for (let attempt = 1; attempt <= PROBE_MAX_RETRIES; attempt++) {
         try {
-            const result = await fetchStats(query, PLANNABLE_FIELDS.join(','));
+            const result = await fetchStats(query, PLANNABLE_FIELDS.join(','), state.searchFull || false);
             incrementApiCalls();
 
             if (result.error) {
@@ -1377,9 +1384,11 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
                 ? Math.min(step.realSize, freeLimit)
                 : freeLimit;
 
+            // 数据范围跟随 state.searchFull（结果页的「数据范围」设置），
+            // 否则「全部数据」结果页只下载到近一年的子集
             const result = await fetchSearchResults(
                 step.query, 1, requestSize, selectedFields,
-                false, REQUEST_TIMEOUT_MS
+                state.searchFull || false, REQUEST_TIMEOUT_MS
             );
             incrementApiCalls();
 

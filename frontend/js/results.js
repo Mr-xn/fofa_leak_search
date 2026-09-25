@@ -820,7 +820,7 @@ async function downloadAllAtOnce(size, fields) {
 
     while (retryCount < maxRetries) {
         try {
-            const data = await fetchSearchResults(state.currentQuery, 1, size, fields);
+            const data = await fetchSearchResults(state.currentQuery, 1, size, fields, state.searchFull || false);
 
             if (data.error) {
                 throw new Error(data.errmsg || '未知错误');
@@ -964,7 +964,7 @@ async function fetchWithRetry(query, page, pageSize, fields, maxRetries) {
 
     while (retryCount < maxRetries) {
         try {
-            const data = await fetchSearchResults(query, page, pageSize, fields);
+            const data = await fetchSearchResults(query, page, pageSize, fields, state.searchFull || false);
             if (data.error) {
                 throw new Error(data.errmsg || '请求失败');
             }

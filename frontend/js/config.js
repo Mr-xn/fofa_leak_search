@@ -13,6 +13,7 @@ export const state = {
     sortField: null,
     sortOrder: 'asc',
     currentQuery: '',
+    searchFull: false,  // 数据范围：true=全部数据（FOFA full=true），false=近一年；与 currentQuery 同时由搜索写入
     isLoading: false,
     startTime: 0,
     useCache: localStorage.getItem('fofa_use_cache') !== 'false',
