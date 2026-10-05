@@ -3,12 +3,31 @@
 import { state } from './config.js';
 import { debug as logDebug, info as logInfo, error as logError } from './logger.js';
 
+// ==================== 请求节流（限制并发，防止资源耗尽） ====================
+const MAX_CONCURRENT_REQUESTS = 5;
+let activeRequestCount = 0;
+const pendingRequestQueue = [];
+
+async function acquireRequestSlot() {
+    if (activeRequestCount >= MAX_CONCURRENT_REQUESTS) {
+        await new Promise(resolve => pendingRequestQueue.push(resolve));
+    }
+    activeRequestCount++;
+}
+
+function releaseRequestSlot() {
+    activeRequestCount--;
+    const next = pendingRequestQueue.shift();
+    if (next) next();
+}
+
 // ==================== 通用 fetch 包装（带超时） ====================
 async function fetchWithTimeout(url, timeoutMs) {
     if (timeoutMs === undefined) {
         const saved = parseInt(localStorage.getItem('fofa_request_timeout'));
         timeoutMs = (saved >= 5 && saved <= 300) ? saved * 1000 : 30000;
     }
+    await acquireRequestSlot();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const started = Date.now();
@@ -33,6 +52,7 @@ async function fetchWithTimeout(url, timeoutMs) {
         throw e;
     } finally {
         clearTimeout(timer);
+        releaseRequestSlot();
     }
 }
 
