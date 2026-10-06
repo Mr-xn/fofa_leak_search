@@ -99,7 +99,7 @@ Download the installer for your platform from the [Releases](https://github.com/
 | Linux | x86_64 | `.deb` / `.rpm` / `.AppImage` |
 | Linux | ARM64 | `.deb` / `.rpm` |
 
-> On older distributions such as Ubuntu 22.04, pick the packages with the `_ubuntu22` suffix (built against an older glibc).
+> All Linux packages are built on Ubuntu 22.04 (the oldest supported LTS, glibc 2.35), so they run on every supported distribution out of the box.
 
 ### macOS
 1. Download the `.dmg` and open it

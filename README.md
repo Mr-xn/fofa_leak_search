@@ -99,7 +99,7 @@ FOFA 网络空间资产搜索工具 — 跨平台桌面应用，基于 [Tauri 2]
 | Linux | x86_64 | `.deb` / `.rpm` / `.AppImage` |
 | Linux | ARM64 | `.deb` / `.rpm` |
 
-> Ubuntu 22.04 等较旧发行版请选择文件名带 `_ubuntu22` 后缀的安装包（面向更低版本 glibc 构建）。
+> 所有 Linux 安装包均基于 Ubuntu 22.04（最旧受支持 LTS，glibc 2.35）构建，在所有受支持的发行版上均可直接运行。
 
 ### macOS 安装说明
 1. 下载 `.dmg` 文件，双击打开

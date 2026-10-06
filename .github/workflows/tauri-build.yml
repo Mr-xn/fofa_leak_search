@@ -62,25 +62,16 @@ jobs:
             target: aarch64-apple-darwin
           - platform: macos-latest
             target: x86_64-apple-darwin
-          - platform: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bundles: deb,rpm,appimage
-          - platform: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            bundles: deb,rpm
-          # Legacy Linux builds on Ubuntu 22.04 (glibc 2.35).
-          # Artifacts are renamed with an _ubuntu22 suffix so users can
-          # distinguish them from the ubuntu-latest (glibc 2.39) packages.
-          # Note: Tauri v2 requires webkit2gtk ≥ 2.38, so Ubuntu 22.04 is
-          # the oldest practical build platform for these packages.
+          # Linux builds on the oldest supported Ubuntu LTS (22.04, glibc 2.35)
+          # so packages run on all supported distributions (AppImage catalog
+          # requirement). Tauri v2 needs webkit2gtk ≥ 2.38, making 22.04 the
+          # oldest practical build platform.
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             bundles: deb,rpm,appimage
-            legacy: true
           - platform: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             bundles: deb,rpm
-            legacy: true
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: msi,nsis
@@ -186,7 +177,6 @@ jobs:
       # tagName 仍需保留：updater 的 latest.json 用它拼接下载地址；
       # releaseDraft 必须与已存在的草稿状态一致。
       - name: Build Tauri App
-        if: ${{ !matrix.legacy }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -200,51 +190,3 @@ jobs:
             --target ${{ matrix.target }}
             ${{ matrix.bundles && format('--bundles {0}', matrix.bundles) || '' }}
 
-      # Legacy build: compile only, no release upload (handled by the next step).
-      - name: Build Legacy Tauri App
-        if: ${{ matrix.legacy }}
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: npx tauri
-          args: >
-            --target ${{ matrix.target }}
-            ${{ matrix.bundles && format('--bundles {0}', matrix.bundles) || '' }}
-
-      # Rename legacy artifacts with _ubuntu22 suffix and upload to the release.
-      - name: Rename and Upload Legacy Linux Artifacts
-        if: ${{ matrix.legacy }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TARGET="${{ matrix.target }}"
-          BUNDLE_DIR="src-tauri/target/${TARGET}/release/bundle"
-          UPLOAD_FILES=()
-
-          for f in "${BUNDLE_DIR}"/deb/*.deb; do
-            [ -f "$f" ] || continue
-            NEW="${f%.deb}_ubuntu22.deb"
-            mv "$f" "$NEW"
-            UPLOAD_FILES+=("$NEW")
-          done
-
-          for f in "${BUNDLE_DIR}"/rpm/*.rpm; do
-            [ -f "$f" ] || continue
-            NEW="${f%.rpm}_ubuntu22.rpm"
-            mv "$f" "$NEW"
-            UPLOAD_FILES+=("$NEW")
-          done
-
-          for f in "${BUNDLE_DIR}"/appimage/*.AppImage; do
-            [ -f "$f" ] || continue
-            NEW="${f%.AppImage}_ubuntu22.AppImage"
-            mv "$f" "$NEW"
-            UPLOAD_FILES+=("$NEW")
-          done
-
-          if [ ${#UPLOAD_FILES[@]} -gt 0 ]; then
-            # release 已由 create-release 建好（build 依赖它），这里只上传。
-            # 不要重新引入 "查不到就创建"：并发下会产生同名草稿。
-            gh release upload "${{ github.ref_name }}" "${UPLOAD_FILES[@]}" --clobber
-          fi
