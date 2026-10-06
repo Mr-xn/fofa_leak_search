@@ -7,6 +7,7 @@ import { incrementApiCalls, getUsageStats, incrementDataCount } from './storage.
 import { isTauri } from './tauri-bridge.js';
 import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
 import { showConfirm } from './utils.js';
+import { t } from './i18n/index.js';
 
 // ==================== 常量 ====================
 
@@ -70,29 +71,34 @@ export function getMaxDownloadLimit(dataSize) {
     const hardLimit = SMART_DOWNLOAD_HARD_LIMIT;
 
     if (remaining === 0) {
-        return { limit: 0, reason: '当月数据配额已用尽，请下月再试或升级账户' };
+        return { limit: 0, reason: t('当月数据配额已用尽，请下月再试或升级账户') };
     }
 
     // 无月度限制的用户 (永久高级会员)
     if (remaining === Infinity) {
         const limit = Math.min(hardLimit, dataSize);
+        const sizeStr = dataSize.toLocaleString();
+        const hardLimitStr = hardLimit.toLocaleString();
         return {
             limit,
             reason: limit === dataSize
-                ? `全量下载 ${dataSize.toLocaleString()} 条`
-                : `硬性上限 ${hardLimit.toLocaleString()} 条，实际 ${dataSize.toLocaleString()} 条`
+                ? t('全量下载 {{size}} 条', { size: sizeStr })
+                : t('硬性上限 {{limit}} 条，实际 {{size}} 条', { limit: hardLimitStr, size: sizeStr })
         };
     }
 
     // 有月度限制的用户
     const limit = Math.min(hardLimit, remaining, dataSize);
+    const sizeStr = dataSize.toLocaleString();
+    const hardLimitStr = hardLimit.toLocaleString();
+    const remainingStr = remaining.toLocaleString();
     let reason = '';
     if (limit === dataSize) {
-        reason = `全量下载 ${dataSize.toLocaleString()} 条`;
+        reason = t('全量下载 {{size}} 条', { size: sizeStr });
     } else if (limit === remaining) {
-        reason = `当月剩余配额 ${remaining.toLocaleString()} 条，不足全量`;
+        reason = t('当月剩余配额 {{remaining}} 条，不足全量', { remaining: remainingStr });
     } else {
-        reason = `硬性上限 ${hardLimit.toLocaleString()} 条`;
+        reason = t('硬性上限 {{limit}} 条', { limit: hardLimitStr });
     }
 
     return { limit, reason };
@@ -396,9 +402,11 @@ export function planQueries(baseQuery, stats, freeLimit, maxTotalLimit = SMART_D
 
     // Case 1: 总量在限制内，无需拆分
     if (planSize <= freeLimit) {
+        const sizeStr = planSize.toLocaleString();
+        const totalStr = stats.size.toLocaleString();
         const desc = planSize < stats.size
-            ? `部分结果 (${planSize.toLocaleString()}/${stats.size.toLocaleString()} 条，受配额限制)`
-            : `全部结果 (${planSize.toLocaleString()} 条)`;
+            ? t('部分结果 ({{size}}/{{total}} 条，受配额限制)', { size: sizeStr, total: totalStr })
+            : t('全部结果 ({{size}} 条)', { size: sizeStr });
         return {
             steps: [{
                 id: 1,
@@ -448,9 +456,11 @@ export function planQueries(baseQuery, stats, freeLimit, maxTotalLimit = SMART_D
     }
 
     // Fallback: 返回单条查询（标记 needsProbe 让上层异步入口处理）
+    const sizeStr = planSize.toLocaleString();
+    const totalStr = stats.size.toLocaleString();
     const desc = planSize < stats.size
-        ? `部分结果 (${planSize.toLocaleString()}/${stats.size.toLocaleString()} 条，受配额限制)`
-        : `全部结果 (${planSize.toLocaleString()} 条，需探测)`;
+        ? t('部分结果 ({{size}}/{{total}} 条，受配额限制)', { size: sizeStr, total: totalStr })
+        : t('全部结果 ({{size}} 条，需探测)', { size: sizeStr });
     return {
         steps: [{
             id: 1,
@@ -540,7 +550,7 @@ export async function planQueriesAsync(baseQuery, stats, freeLimit, maxTotalLimi
                 logWarn('smartdl', '笛卡尔积降级失败，标记 probeFailed', { query: probeStep.query });
                 probeStep.probeFailed = true;
                 probeStep.needsProbe = false;
-                probeStep.description = `${probeStep.description} ⚠ 探测失败，此步可能超限`;
+                probeStep.description = `${probeStep.description} ${t('⚠ 探测失败，此步可能超限')}`;
                 finalSteps.push(probeStep);
             }
         }
@@ -661,12 +671,13 @@ function cartesianSplit(probeStep, stats, freeLimit) {
 function cartesianRecursive(query, estSize, candidates, depth, freeLimit, outSteps, condTrail) {
     if (estSize <= freeLimit) {
         // 已可容纳，产出步骤
-        const trailStr = condTrail.length > 0 ? condTrail.join(' & ') : '(全集)';
+        const trailStr = condTrail.length > 0 ? condTrail.join(' & ') : t('(全集)');
+        const estSizeStr = estSize.toLocaleString();
         outSteps.push({
             id: 0,
             query,
             estimatedSize: estSize,
-            description: `${trailStr} (~${estSize.toLocaleString()}, 估算)`,
+            description: `${trailStr} (${t('~{{size}}, 估算', { size: estSizeStr })})`,
             status: 'pending'
         });
         return estSize;
@@ -700,12 +711,13 @@ function cartesianRecursive(query, estSize, candidates, depth, freeLimit, outSte
     if (otherSize > 0) {
         if (otherSize <= freeLimit) {
             const otherQuery = buildQuery(query, [{ field: dim.field, op: '!=', values: usedValues }]);
-            const trailStr = [...condTrail, `其他${dim.field}`].join(' & ');
+            const trailStr = [...condTrail, t('其他{{field}}', { field: dim.field })].join(' & ');
+            const otherSizeStr = otherSize.toLocaleString();
             outSteps.push({
                 id: 0,
                 query: otherQuery,
                 estimatedSize: otherSize,
-                description: `${trailStr} (~${otherSize.toLocaleString()}, 估算)`,
+                description: `${trailStr} (${t('~{{size}}, 估算', { size: otherSizeStr })})`,
                 status: 'pending'
             });
             covered += otherSize;
@@ -714,7 +726,7 @@ function cartesianRecursive(query, estSize, candidates, depth, freeLimit, outSte
             const otherQuery = buildQuery(query, [{ field: dim.field, op: '!=', values: usedValues }]);
             covered += cartesianRecursive(
                 otherQuery, otherSize, candidates, depth + 1, freeLimit, outSteps,
-                [...condTrail, `其他${dim.field}`]
+                [...condTrail, t('其他{{field}}', { field: dim.field })]
             );
         }
     }
@@ -865,12 +877,13 @@ async function bisectOverLimitStep(step, realSize, maxsize, originalStats, depth
             continue;
         }
 
+        const subProbeSizeStr = subProbe.size.toLocaleString();
         const subStep = {
             id: 0, // reassignStepIds 会重排
             query: subQuery,
             estimatedSize: subProbe.size,
             realSize: subProbe.size,
-            description: `${step.description} & ${nextDim.field}=${bucket.name} (预查 ${subProbe.size.toLocaleString()})`,
+            description: `${step.description} & ${nextDim.field}=${bucket.name} (${t('预查 {{size}}', { size: subProbeSizeStr })})`,
             status: 'pending'
         };
 
@@ -884,7 +897,7 @@ async function bisectOverLimitStep(step, realSize, maxsize, originalStats, depth
             } else {
                 // 递归也拆不动，标记 overLimit（执行时会触发 F 点检查）
                 subStep.overLimit = true;
-                subStep.description += ' ⚠ 仍超限';
+                subStep.description += ` ${t('⚠ 仍超限')}`;
                 subSteps.push(subStep);
             }
         } else {
@@ -901,19 +914,20 @@ async function bisectOverLimitStep(step, realSize, maxsize, originalStats, depth
         const otherProbe = await fetchSearchSizeForProbe(otherQuery);
         if (otherProbe && !otherProbe.error && otherProbe.size > 0) {
             if (otherProbe.size <= maxsize) {
+                const otherProbeSizeStr = otherProbe.size.toLocaleString();
                 subSteps.push({
                     id: 0,
                     query: otherQuery,
                     estimatedSize: otherProbe.size,
                     realSize: otherProbe.size,
-                    description: `${step.description} & 其他${nextDim.field} (预查 ${otherProbe.size.toLocaleString()})`,
+                    description: `${step.description} & ${t('其他{{field}}', { field: nextDim.field })} (${t('预查 {{size}}', { size: otherProbeSizeStr })})`,
                     status: 'pending'
                 });
             } else {
                 // "其他"也超限，递归拆分
                 const otherStep = {
                     id: 0, query: otherQuery, estimatedSize: otherProbe.size,
-                    description: `${step.description} & 其他${nextDim.field}`, status: 'pending'
+                    description: `${step.description} & ${t('其他{{field}}', { field: nextDim.field })}`, status: 'pending'
                 };
                 const deeper = await bisectOverLimitStep(
                     otherStep, otherProbe.size, maxsize, originalStats, depth + 1
@@ -964,7 +978,7 @@ export async function prefetchStepSizes(steps, maxsize, originalStats, onProgres
         if (!probeResult || probeResult.error || !probeResult.size) {
             // 预查失败：保留原步骤 + 标记
             step.prefetchFailed = true;
-            step.description = `${step.description} ⚠ 预查失败`;
+            step.description = `${step.description} ${t('⚠ 预查失败')}`;
             result.push(step);
             failed++;
         } else {
@@ -994,7 +1008,8 @@ export async function prefetchStepSizes(steps, maxsize, originalStats, onProgres
                 } else {
                     // 二分失败，保留原步骤标记超限
                     step.overLimit = true;
-                    step.description = `${step.description} ⚠ 真实超限 ${realSize.toLocaleString()}，二分失败`;
+                    const realSizeStr = realSize.toLocaleString();
+                    step.description = `${step.description} ${t('⚠ 真实超限 {{size}}，二分失败', { size: realSizeStr })}`;
                     result.push(step);
                 }
             } else {
@@ -1035,7 +1050,7 @@ async function probeAndSplit(subQuery, freeLimit, depth, parentOriginalSize) {
                 id: 0,
                 query: subQuery,
                 estimatedSize: parentOriginalSize || freeLimit,
-                description: `(达到探测深度上限，可能超限)`,
+                description: t('(达到探测深度上限，可能超限)'),
                 status: 'pending'
             }],
             probeCount: 0
@@ -1153,14 +1168,18 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
                 // 关键修复：不静默丢弃，产出 needsProbe 占位步骤
                 // 不计入 coveredCount，让"其他"逻辑知道这部分还未真正规划
                 const query = buildQuery(baseQuery, [{ field, op: '=', values: [entry.name] }]);
+                const ratioStr = (bucketRatio * 100).toFixed(1);
                 const probeReason = needsProbeByRatio
-                    ? `超大桶占比 ${(bucketRatio * 100).toFixed(1)}%，比例估算不可信`
-                    : `现有维度无法拆分`;
+                    ? t('超大桶占比 {{ratio}}%，比例估算不可信', { ratio: ratioStr })
+                    : t('现有维度无法拆分');
+                const entryCountStr = entry.count.toLocaleString();
                 steps.push({
                     id: stepId++,
                     query,
                     estimatedSize: entry.count,
-                    description: `${field.toUpperCase()}: ${entry.name} (${entry.count.toLocaleString()} 条，待探测)`,
+                    description: t('{{field}}: {{name}} ({{count}} 条，待探测)', {
+                        field: field.toUpperCase(), name: entry.name, count: entryCountStr
+                    }),
                     status: 'pending',
                     needsProbe: true,
                     probeReason
@@ -1179,13 +1198,14 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
     const realRemaining = Math.max(0, stats.size - topTotal);
 
     if (realRemaining > 0) {
+        const realRemainingStr = realRemaining.toLocaleString();
         if (realRemaining <= freeLimit) {
             const query = buildQuery(baseQuery, [{ field, op: '!=', values: usedValues }]);
             steps.push({
                 id: stepId++,
                 query,
                 estimatedSize: realRemaining,
-                description: `其他 ${field} (${realRemaining.toLocaleString()} 条)`,
+                description: t('其他 {{field}} ({{count}} 条)', { field, count: realRemainingStr }),
                 status: 'pending'
             });
         } else {
@@ -1195,7 +1215,7 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
                 id: stepId++,
                 query,
                 estimatedSize: realRemaining,
-                description: `其他 ${field} (${realRemaining.toLocaleString()} 条，待探测)`,
+                description: t('其他 {{field}} ({{count}} 条，待探测)', { field, count: realRemainingStr }),
                 status: 'pending',
                 needsProbe: true
             });
@@ -1263,11 +1283,14 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
             { field: primaryField, op: '=', values: [entry.name] },
             { field: secondaryField, op: '!=', values: usedValues }
         ]);
+        const remainingStr = remaining.toLocaleString();
         steps.push({
             id: 0,
             query,
             estimatedSize: remaining,
-            description: `${primaryField}=${entry.name} & 其他 ${secondaryField} (~${remaining.toLocaleString()})`,
+            description: t('{{primary}}={{name}} & 其他 {{secondary}} (~{{size}})', {
+                primary: primaryField, name: entry.name, secondary: secondaryField, size: remainingStr
+            }),
             status: 'pending'
         });
     }
@@ -1295,10 +1318,10 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
  */
 function buildDescription(field, values, count) {
     const label = field.toUpperCase();
-    if (values.length === 1) {
-        return `${label}: ${values[0]} (${count.toLocaleString()} 条)`;
-    }
-    return `${label}: ${values.join(', ')} (${count.toLocaleString()} 条)`;
+    const countStr = count.toLocaleString();
+    return t('{{label}}: {{value}} ({{count}} 条)', {
+        label, value: values.join(', '), count: countStr
+    });
 }
 
 // ==================== 计划执行 ====================
@@ -1328,15 +1351,15 @@ function sleep(ms) {
  */
 async function showFPointAuthorizeDialog(step, consumed) {
     const remaining = await getRemainingFPoint();
-    const remainingStr = remaining != null ? remaining.toLocaleString() : '(未知)';
+    const remainingStr = remaining != null ? remaining.toLocaleString() : t('(未知)');
     return await showConfirm({
-        title: '⚠ 检测到 F 点消耗',
-        message: `步骤 #${step.id} 执行消耗了 <strong style="color: var(--error);">${consumed}</strong> F 点。\n` +
-                 `当前余额：<strong>${remainingStr}</strong> F 点。\n\n` +
-                 `这通常意味着 FOFA 数据在预查后更新了，实际匹配数超出预估。\n` +
-                 `继续？后续步骤可能继续消耗 F 点。`,
-        confirmText: '允许本次',
-        cancelText: '取消下载',
+        title: t('⚠ 检测到 F 点消耗'),
+        message: t('步骤 #{{id}} 执行消耗了 <strong style="color: var(--error);">{{consumed}}</strong> F 点。\n', { id: step.id, consumed }) +
+                 t('当前余额：<strong>{{remaining}}</strong> F 点。\n\n', { remaining: remainingStr }) +
+                 t('这通常意味着 FOFA 数据在预查后更新了，实际匹配数超出预估。\n') +
+                 t('继续？后续步骤可能继续消耗 F 点。'),
+        confirmText: t('允许本次'),
+        cancelText: t('取消下载'),
         defaultFocus: 'cancel'  // 默认聚焦取消，防误点
     });
 }
@@ -1407,7 +1430,7 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
             if (result.error) {
                 // 解析详细的错误信息
                 const errDetail = {
-                    msg: result.errmsg || 'API 返回错误',
+                    msg: result.errmsg || t('API 返回错误'),
                     code: result.errcode,
                     size: result.size,
                     consumed: result.consumed_fpoint,
@@ -1420,7 +1443,7 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
 
                 if (attempt < MAX_RETRIES) {
                     const backoffMs = attempt * 2000; // 2s, 4s, 6s
-                    step.errorMsg = `重试中 (${attempt}/${MAX_RETRIES}): ${lastError}`;
+                    step.errorMsg = t('重试中 ({{attempt}}/{{max}}): {{error}}', { attempt, max: MAX_RETRIES, error: lastError });
                     if (onProgress) onProgress();
                     await sleep(backoffMs);
                     continue;
@@ -1439,14 +1462,15 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
             if (err.code === 'FPOINT_UNAUTHORIZED') {
                 throw err;
             }
+            const timeoutSec = REQUEST_TIMEOUT_MS / 1000;
             lastError = err.name === 'AbortError'
-                ? `请求超时 (${REQUEST_TIMEOUT_MS / 1000}s)`
-                : (err.message || '网络错误');
+                ? t('请求超时 ({{seconds}}s)', { seconds: timeoutSec })
+                : (err.message || t('网络错误'));
             logWarn('smartdl', `步骤 ${stepIndex + 1}/${totalSteps} 第 ${attempt} 次尝试网络错误`, { query: step.query, error: lastError, attempt, maxRetries: MAX_RETRIES });
 
             if (attempt < MAX_RETRIES) {
                 const backoffMs = attempt * 2000;
-                step.errorMsg = `重试中 (${attempt}/${MAX_RETRIES})...`;
+                step.errorMsg = t('重试中 ({{attempt}}/{{max}})...', { attempt, max: MAX_RETRIES });
                 if (onProgress) onProgress();
                 await sleep(backoffMs);
                 continue;
@@ -1455,7 +1479,7 @@ async function executeStep(step, selectedFields, freeLimit, onProgress, allResul
     }
 
     // 所有重试均失败
-    step.errorMsg = lastError || '请求失败';
+    step.errorMsg = lastError || t('请求失败');
     step.retryCount = undefined;
     logError('smartdl', `步骤 ${stepIndex + 1}/${totalSteps} 失败（已重试 ${MAX_RETRIES} 次）`, { query: step.query, error: step.errorMsg });
 }
@@ -1503,11 +1527,11 @@ export async function executePlan(baseQuery, planSteps, selectedFields, onProgre
                 logWarn('smartdl', '用户拒绝 F 点授权，中止执行', { stepIndex: i, totalSteps });
                 // 触发步骤标记为 error（避免停留在 running）
                 step.status = 'error';
-                step.errorMsg = '用户拒绝 F 点授权';
+                step.errorMsg = t('用户拒绝 F 点授权');
                 // 标记剩余步骤为 skipped
                 for (let j = i + 1; j < pendingSteps.length; j++) {
                     pendingSteps[j].status = 'skipped';
-                    pendingSteps[j].errorMsg = '用户拒绝 F 点授权，已跳过';
+                    pendingSteps[j].errorMsg = t('用户拒绝 F 点授权，已跳过');
                 }
                 break;
             }

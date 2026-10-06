@@ -1,6 +1,19 @@
 // js/query-normalizer.js - 查询语句规范化
 
 /**
+ * 智能/全角引号 → ASCII 引号
+ * macOS WKWebView 的「智能引号」和中文输入法全角模式会把 " ' 改写成 “ ” ‘ ’ ＂ ＇，
+ * FOFA 查询语法只认 ASCII 引号，统一还原
+ * @param {string} s
+ * @returns {string}
+ */
+export function normalizeQuotes(s) {
+    return String(s)
+        .replace(/[“”„‟＂]/g, '"')
+        .replace(/[‘’‚‛＇]/g, "'");
+}
+
+/**
  * 清理查询语句，确保相同语义的查询生成相同的缓存键
  * @param {string} query - 原始查询语句
  * @returns {string} - 规范化后的查询语句
@@ -8,7 +21,7 @@
 export function normalizeQuery(query) {
     if (!query) return '';
 
-    let normalized = query.trim();
+    let normalized = normalizeQuotes(query.trim());
 
     // 1. 规范化逻辑连接符周围的空格
     normalized = normalized.replace(/\s*&&\s*/g, ' && ');
@@ -61,8 +74,8 @@ export function isFullyWrapped(query) {
 export function composeQuery(baseQuery, conditionParts) {
     const conds = (conditionParts || []).filter(Boolean).join(' && ');
     const base = (baseQuery || '').trim();
-    if (!conds) return base;
-    if (!base) return conds;
+    if (!conds) return normalizeQuotes(base);
+    if (!base) return normalizeQuotes(conds);
     const wrappedBase = isFullyWrapped(base) ? base : `(${base})`;
-    return `${wrappedBase} && ${conds}`;
+    return normalizeQuotes(`${wrappedBase} && ${conds}`);
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FOFA 搜索工具</title>
+    <title data-i18n>FOFA 搜索工具</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -11,17 +11,17 @@
     <div class="topbar">
         <div class="topbar-accent"></div>
         <div class="topbar-inner">
-            <a href="/" class="topbar-brand">
+            <a href="/" class="topbar-brand" data-i18n>
                 <span class="dot"></span>
                 FOFA 搜索
             </a>
             <div class="topbar-actions">
-                <button class="btn btn-ghost btn-sm" onclick="showUsageStats()" title="本月使用统计">
+                <button class="btn btn-ghost btn-sm" onclick="showUsageStats()" title="本月使用统计" data-i18n-title data-i18n>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
                     用量
                 </button>
-                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showUserInfo()">账户信息</button>
-                <button class="btn btn-ghost btn-sm" onclick="showSettingsModal()" title="设置">
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); showUserInfo()" data-i18n>账户信息</button>
+                <button class="btn btn-ghost btn-sm" onclick="showSettingsModal()" title="设置" data-i18n-title data-i18n>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     设置
                 </button>
@@ -29,7 +29,7 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                     Mrxn
                 </span>
-                <span class="topbar-author" onclick="showAboutModal()" title="关于" style="cursor: pointer; border-left: none; padding-left: 0; margin-left: 0;">
+                <span class="topbar-author" onclick="showAboutModal()" title="关于" style="cursor: pointer; border-left: none; padding-left: 0; margin-left: 0;" data-i18n-title>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                 </span>
             </div>
@@ -43,14 +43,14 @@
                 <div class="search-input-wrapper">
                     <input type="text" class="search-input" id="searchInput"
                            placeholder='title="login" 或 body="admin"'
-                           autocomplete="off">
-                    <button type="button" class="search-clear-btn" id="searchClearBtn" onclick="clearSearchInput()" title="清除">
+                           autocomplete="off" data-i18n-placeholder>
+                    <button type="button" class="search-clear-btn" id="searchClearBtn" onclick="clearSearchInput()" title="清除" data-i18n-title>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                     <div class="suggestions" id="suggestions"></div>
                 </div>
-                <button class="btn btn-primary search-btn disabled" disabled onclick="doSearch()">搜索</button>
-                <button class="copy-query-btn" id="copyQueryBtn" onclick="copyCurrentQuery()" title="复制当前查询语句" disabled>
+                <button class="btn btn-primary search-btn disabled" disabled onclick="doSearch()" data-i18n>搜索</button>
+                <button class="copy-query-btn" id="copyQueryBtn" onclick="copyCurrentQuery()" title="复制当前查询语句" disabled data-i18n-title>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -62,21 +62,21 @@
             <div class="toolbar" style="margin-top: 8px;">
                 <!-- 快速筛选入口 -->
                 <div class="filter-header" style="margin: 0;">
-                    <button class="btn btn-sm" id="filterToggleBtn" onclick="toggleFilters()">
+                    <button class="btn btn-sm" id="filterToggleBtn" onclick="toggleFilters()" data-i18n>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
                         筛选
                     </button>
-                    <button class="btn btn-sm disabled" id="statsToggleBtn" disabled onclick="toggleStats()" title="统计概览（含协议、端口、国家等 Top 5 排名）">
+                    <button class="btn btn-sm disabled" id="statsToggleBtn" disabled onclick="toggleStats()" title="统计概览（含协议、端口、国家等 Top 5 排名）" data-i18n-title data-i18n>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                         统计概览
                     </button>
-                    <button class="btn btn-sm fav-star-btn" id="favToggleBtn" onclick="handleFavoriteClick()" title="收藏当前查询条件">
+                    <button class="btn btn-sm fav-star-btn" id="favToggleBtn" onclick="handleFavoriteClick()" title="收藏当前查询条件" data-i18n-title data-i18n>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                         </svg>
                         收藏
                     </button>
-                    <button class="btn btn-sm" id="iconHashBtn" onclick="showIconHashModal()" title="计算 favicon 的 FOFA icon_hash">
+                    <button class="btn btn-sm" id="iconHashBtn" onclick="showIconHashModal()" title="计算 favicon 的 FOFA icon_hash" data-i18n-title>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                         </svg>
@@ -89,7 +89,7 @@
                 <!-- 字段选择 -->
                 <div class="fields-dropdown-wrapper">
                     <button class="fields-dropdown-btn" id="fieldsDropdownBtn" onclick="toggleFieldsDropdown()">
-                        <span id="fieldsDropdownText">字段</span>
+                        <span id="fieldsDropdownText" data-i18n>字段</span>
                         <span class="arrow">▼</span>
                     </button>
                     <div class="fields-dropdown-menu" id="fieldsDropdownMenu"></div>
@@ -99,7 +99,7 @@
 
                 <!-- 每页数量 -->
                 <div class="toolbar-group">
-                    <span class="toolbar-label">每页</span>
+                    <span class="toolbar-label" data-i18n>每页</span>
                     <select id="pageSize" class="select-sm">
                         <option value="10">10</option>
                         <option value="20">20</option>
@@ -110,7 +110,7 @@
                     </select>
                     <span class="tooltip-wrapper">
                         <span class="tooltip-icon">?</span>
-                        <span class="tooltip-content">
+                        <span class="tooltip-content" data-i18n>
                             每页返回的数据条数。在免费额度内不扣F点，超出后按实际下载量扣费。数值越大翻页越少，但单次请求风险越高。
                         </span>
                     </span>
@@ -120,24 +120,24 @@
 
                 <!-- 数据范围（合并时间范围 + 结果模式） -->
                 <div class="toolbar-group">
-                    <span class="toolbar-label">数据范围</span>
+                    <span class="toolbar-label" data-i18n>数据范围</span>
                     <select id="dataRange" class="select-sm">
-                        <option value="default">近一年</option>
-                        <option value="full">全部数据</option>
-                        <option value="after=2026-01-01">2026年至今</option>
-                        <option value="after=2025-01-01">2025年至今</option>
-                        <option value="after=2024-01-01">2024年至今</option>
-                        <option value="after=2023-01-01">2023年至今</option>
+                        <option value="default" data-i18n>近一年</option>
+                        <option value="full" data-i18n>全部数据</option>
+                        <option value="after=2026-01-01" data-i18n>2026年至今</option>
+                        <option value="after=2025-01-01" data-i18n>2025年至今</option>
+                        <option value="after=2024-01-01" data-i18n>2024年至今</option>
+                        <option value="after=2023-01-01" data-i18n>2023年至今</option>
                     </select>
                     <span class="tooltip-wrapper">
                         <span class="tooltip-icon">?</span>
-                        <span class="tooltip-content">FOFA 默认仅返回近一年数据，选择「全部」可搜索历史全量数据</span>
+                        <span class="tooltip-content" data-i18n>FOFA 默认仅返回近一年数据，选择「全部」可搜索历史全量数据</span>
                     </span>
                 </div>
 
                 <!-- 右侧：高级选项 -->
                 <div style="margin-left: auto;">
-                    <button class="btn btn-ghost btn-sm" onclick="toggleAdvanced()">高级选项</button>
+                    <button class="btn btn-ghost btn-sm" onclick="toggleAdvanced()" data-i18n>高级选项</button>
                 </div>
             </div>
 
@@ -145,39 +145,39 @@
             <div class="advanced-options" id="advancedOptions">
                 <div class="config-grid">
                     <div class="config-item">
-                        <label>缓存设置</label>
+                        <label data-i18n>缓存设置</label>
                         <div class="cache-config">
                             <label class="toggle-switch">
                                 <input type="checkbox" id="useCache" checked>
                                 <span class="toggle-slider"></span>
-                                <span class="toggle-label">使用缓存</span>
+                                <span class="toggle-label" data-i18n>使用缓存</span>
                             </label>
-                            <button class="btn btn-sm" onclick="showCacheManager()">管理</button>
+                            <button class="btn btn-sm" onclick="showCacheManager()" data-i18n>管理</button>
                         </div>
                         <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 11px; color: var(--text-muted);">有效期:</span>
+                            <span style="font-size: 11px; color: var(--text-muted);" data-i18n>有效期:</span>
                             <div class="cache-time-input">
                                 <input type="number" id="cacheTimeValue" value="6" min="1" max="365">
                                 <select id="cacheTimeUnit">
-                                    <option value="hours">小时</option>
-                                    <option value="days">天</option>
-                                    <option value="months" selected>月</option>
+                                    <option value="hours" data-i18n>小时</option>
+                                    <option value="days" data-i18n>天</option>
+                                    <option value="months" selected data-i18n>月</option>
                                 </select>
                             </div>
                         </div>
                     </div>
                     <div class="config-item">
-                        <label>已选字段标签</label>
+                        <label data-i18n>已选字段标签</label>
                         <div class="fields-selected-tags" id="selectedFieldsTags"></div>
                     </div>
                     <div class="config-item">
-                        <label>统计概览</label>
+                        <label data-i18n>统计概览</label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="autoLoadStats">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-label">搜索时自动加载</span>
+                            <span class="toggle-label" data-i18n>搜索时自动加载</span>
                         </label>
-                        <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                        <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" data-i18n>
                             开启后每次搜索自动查询统计概览（含协议、端口、国家等 Top 5 排名），会额外消耗 API 请求次数
                         </span>
                     </div>
@@ -196,23 +196,23 @@
         <!-- 统计聚合面板 -->
         <div class="stats-panel" id="statsPanel">
             <div class="stats-header">
-                <div class="stats-header-left">
+                <div class="stats-header-left" data-i18n>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
                     统计概览
                 </div>
                 <div class="stats-header-right">
-                    <button class="btn btn-sm" onclick="downloadStatsScreenshot()" title="下载统计截图（PNG）">
+                    <button class="btn btn-sm" onclick="downloadStatsScreenshot()" title="下载统计截图（PNG）" data-i18n-title data-i18n>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                         截图
                     </button>
-                    <button class="btn btn-sm" onclick="refreshStats()" title="刷新统计">
+                    <button class="btn btn-sm" onclick="refreshStats()" title="刷新统计" data-i18n-title data-i18n>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                         刷新
                     </button>
                 </div>
             </div>
             <div class="stats-content" id="statsContent">
-                <div class="stats-loading">正在加载统计信息...</div>
+                <div class="stats-loading" data-i18n>正在加载统计信息...</div>
             </div>
         </div>
 
@@ -222,39 +222,39 @@
             <div class="results-info" id="statsGrid">
                 <div class="results-info-left">
                     <div class="results-stat">
-                        <span class="label">结果</span>
+                        <span class="label" data-i18n>结果</span>
                         <span class="value accent" id="totalResults">0</span>
                     </div>
                     <div class="results-stat">
-                        <span class="label">页码</span>
+                        <span class="label" data-i18n>页码</span>
                         <span class="value" id="currentPage">1</span>
                     </div>
                     <div class="results-stat">
-                        <span class="label">F点</span>
+                        <span class="label" data-i18n>F点</span>
                         <span class="value" id="consumedFpoint">-</span>
                     </div>
                     <div class="results-stat" id="quotaWarning" style="display: none;">
                         <span class="value" style="color: var(--warning); font-size: 11px;" id="quotaWarningText">-</span>
                     </div>
                     <div class="results-stat">
-                        <span class="label">耗时</span>
+                        <span class="label" data-i18n>耗时</span>
                         <span class="value" id="queryTime">-</span>
                     </div>
                     <!-- 内联分页（顶部） -->
                     <div class="inline-pagination" id="inlinePagination" style="display: none;"></div>
                 </div>
                 <div class="results-info-right" id="downloadButtons" style="display: none;">
-                    <button class="btn btn-sm" onclick="openAllLinks()" title="在默认浏览器中打开当前页所有链接">🔗 全部打开</button>
-                    <button class="btn btn-sm" onclick="downloadCurrentPage()" title="下载当前页">下载当前页</button>
-                    <button class="btn btn-primary btn-sm" onclick="downloadAllPages()" title="下载全部">下载全部</button>
-                    <button class="btn btn-sm" id="smartDownloadBtn" onclick="openSmartDownload()" title="智能分片下载：自动拆分大查询，规避F点消耗" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border-color: transparent;">🧠 智能下载</button>
+                    <button class="btn btn-sm" onclick="openAllLinks()" title="在默认浏览器中打开当前页所有链接" data-i18n-title data-i18n>🔗 全部打开</button>
+                    <button class="btn btn-sm" onclick="downloadCurrentPage()" title="下载当前页" data-i18n-title data-i18n>下载当前页</button>
+                    <button class="btn btn-primary btn-sm" onclick="downloadAllPages()" title="下载全部" data-i18n-title data-i18n>下载全部</button>
+                    <button class="btn btn-sm" id="smartDownloadBtn" onclick="openSmartDownload()" title="智能分片下载：自动拆分大查询，规避F点消耗" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border-color: transparent;" data-i18n-title data-i18n>🧠 智能下载</button>
                 </div>
             </div>
 
             <!-- 加载状态 -->
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <p>正在搜索...</p>
+                <p data-i18n>正在搜索...</p>
             </div>
 
             <!-- 空状态 -->
@@ -262,8 +262,8 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
                 </svg>
-                <h3>开始搜索</h3>
-                <p>输入查询语句搜索网络资产，支持 FOFA 查询语法</p>
+                <h3 data-i18n>开始搜索</h3>
+                <p data-i18n>输入查询语句搜索网络资产，支持 FOFA 查询语法</p>
             </div>
 
             <!-- 数据表格 -->
@@ -286,11 +286,11 @@
     <div class="modal-overlay" id="settingsModal">
         <div class="modal settings-modal">
             <div class="settings-header">
-                <h2 class="settings-title">
+                <h2 class="settings-title" data-i18n>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     设置
                 </h2>
-                <button class="modal-close-btn" onclick="closeSettingsModal()" title="关闭">
+                <button class="modal-close-btn" onclick="closeSettingsModal()" title="关闭" data-i18n-title>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
@@ -300,39 +300,54 @@
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        <span>API 配置</span>
+                        <span data-i18n>API 配置</span>
                     </div>
-                    <p class="settings-section-desc">配置 FOFA API Key，保存在本地浏览器中</p>
+                    <p class="settings-section-desc" data-i18n>配置 FOFA API Key，保存在本地浏览器中</p>
                     <div class="settings-api-row">
                         <div class="modal-input-wrapper" style="flex: 1;">
-                            <input type="password" class="modal-input" id="settingsApiKeyInput" placeholder="请输入 API Key">
-                            <button type="button" class="toggle-password" onclick="toggleSettingsPassword()" title="显示/隐藏">
+                            <input type="password" class="modal-input" id="settingsApiKeyInput" placeholder="请输入 API Key" data-i18n-placeholder>
+                            <button type="button" class="toggle-password" onclick="toggleSettingsPassword()" title="显示/隐藏" data-i18n-title>
                                 <svg id="settingsEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
                                 </svg>
                             </button>
                         </div>
-                        <button class="btn btn-primary btn-sm" onclick="saveSettingsApiKey()">保存</button>
+                        <button class="btn btn-primary btn-sm" onclick="saveSettingsApiKey()" data-i18n>保存</button>
                     </div>
-                    <a onclick="window.openUrl('https://fofa.info/userInfo')" class="link" style="font-size: 12px; cursor: pointer; margin-top: 6px; display: inline-block;">
+                    <a onclick="window.openUrl('https://fofa.info/userInfo')" class="link" style="font-size: 12px; cursor: pointer; margin-top: 6px; display: inline-block;" data-i18n>
                         前往 FOFA 个人中心获取 API Key →
                     </a>
+                </div>
+
+                <!-- 通用：界面语言 -->
+                <div class="settings-section">
+                    <div class="settings-section-header">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        <span data-i18n>界面语言</span>
+                    </div>
+                    <div class="settings-btn-row">
+                        <select id="langSelect" class="modal-input" style="max-width: 220px;">
+                            <option value="zh-CN">简体中文</option>
+                            <option value="en">English</option>
+                        </select>
+                        <span class="settings-section-desc" style="margin: 0;" data-i18n>默认跟随系统语言，非中文环境显示英文</span>
+                    </div>
                 </div>
 
                 <!-- 配置管理 -->
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        <span>配置管理</span>
+                        <span data-i18n>配置管理</span>
                     </div>
-                    <p class="settings-section-desc">导出或导入应用配置（含 API Key、筛选条件、缓存设置等）</p>
+                    <p class="settings-section-desc" data-i18n>导出或导入应用配置（含 API Key、筛选条件、缓存设置等）</p>
                     <div class="settings-btn-row">
-                        <button class="btn btn-sm" onclick="exportConfigToFile()">
+                        <button class="btn btn-sm" onclick="exportConfigToFile()" data-i18n>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             导出配置
                         </button>
-                        <button class="btn btn-sm" onclick="importConfigFromFile()">
+                        <button class="btn btn-sm" onclick="importConfigFromFile()" data-i18n>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                             导入配置
                         </button>
@@ -343,12 +358,12 @@
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <span>导出设置</span>
+                        <span data-i18n>导出设置</span>
                     </div>
                     <div class="settings-toggle-row">
                         <div>
-                            <span class="settings-toggle-label">导出 CSV 时包含查询语句</span>
-                            <span class="settings-toggle-desc">在导出的 CSV 文件首行添加查询条件、导出时间等元信息</span>
+                            <span class="settings-toggle-label" data-i18n>导出 CSV 时包含查询语句</span>
+                            <span class="settings-toggle-desc" data-i18n>在导出的 CSV 文件首行添加查询条件、导出时间等元信息</span>
                         </div>
                         <label class="toggle-switch">
                             <input type="checkbox" id="exportIncludeQuery">
@@ -358,13 +373,13 @@
 
                     <!-- 导出文件保存位置 -->
                     <div class="settings-field" style="margin-top: 12px;">
-                        <label>保存位置（导出文件）</label>
-                        <p class="settings-toggle-desc">桌面版导出 CSV/日志的保存目录；留空则保存到系统「下载」目录</p>
+                        <label data-i18n>保存位置（导出文件）</label>
+                        <p class="settings-toggle-desc" data-i18n>桌面版导出 CSV/日志的保存目录；留空则保存到系统「下载」目录</p>
                         <div style="display: flex; gap: 6px; margin-top: 6px;">
                             <input type="text" class="settings-input" id="exportSaveDir"
-                                   placeholder="系统「下载」目录（默认）" style="flex: 1;">
+                                   placeholder="系统「下载」目录（默认）" style="flex: 1;" data-i18n-placeholder>
                             <button class="btn btn-ghost btn-sm" id="pickExportDirBtn"
-                                    onclick="chooseExportDir()" title="选择目录" style="flex-shrink: 0;">选择目录</button>
+                                    onclick="chooseExportDir()" title="选择目录" style="flex-shrink: 0;" data-i18n-title data-i18n>选择目录</button>
                         </div>
                     </div>
                 </div>
@@ -373,20 +388,20 @@
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <span>更新设置</span>
+                        <span data-i18n>更新设置</span>
                     </div>
                     <div class="config-item">
                         <label class="toggle-switch">
                             <input type="checkbox" id="autoCheckUpdate" checked onchange="saveAutoCheckUpdate(this.checked)">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-label">启动时自动检测新版本</span>
+                            <span class="toggle-label" data-i18n>启动时自动检测新版本</span>
                         </label>
-                        <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                        <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" data-i18n>
                             通过 GitHub Releases API 检查更新，不在本地存储任何数据
                         </span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="btn btn-primary btn-sm" onclick="manualCheckUpdate()">检查更新</button>
+                        <button class="btn btn-primary btn-sm" onclick="manualCheckUpdate()" data-i18n>检查更新</button>
                         <span style="font-size: 11px; color: var(--text-muted);" id="updateStatus"></span>
                     </div>
                 </div>
@@ -395,12 +410,12 @@
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
-                        <span>诊断日志</span>
+                        <span data-i18n>诊断日志</span>
                     </div>
                     <div class="settings-toggle-row">
                         <div>
-                            <span class="settings-toggle-label">启用诊断日志</span>
-                            <span class="settings-toggle-desc">记录请求、代理、更新检测、缓存和下载等运行状态，默认关闭</span>
+                            <span class="settings-toggle-label" data-i18n>启用诊断日志</span>
+                            <span class="settings-toggle-desc" data-i18n>记录请求、代理、更新检测、缓存和下载等运行状态，默认关闭</span>
                         </div>
                         <label class="toggle-switch">
                             <input type="checkbox" id="loggingEnabled">
@@ -408,21 +423,21 @@
                         </label>
                     </div>
                     <div class="settings-field">
-                        <label>日志等级</label>
+                        <label data-i18n>日志等级</label>
                         <select class="settings-input" id="loggingLevel">
-                            <option value="error">错误</option>
-                            <option value="warn">警告</option>
-                            <option value="info">信息</option>
-                            <option value="debug">调试（完整 URL，可能包含 API Key）</option>
+                            <option value="error" data-i18n>错误</option>
+                            <option value="warn" data-i18n>警告</option>
+                            <option value="info" data-i18n>信息</option>
+                            <option value="debug" data-i18n>调试（完整 URL，可能包含 API Key）</option>
                         </select>
                     </div>
                     <div class="settings-btn-row">
-                        <button class="btn btn-sm" id="refreshLogsBtn">刷新日志</button>
-                        <button class="btn btn-sm" id="exportLogsBtn">导出日志</button>
-                        <button class="btn btn-sm" id="clearLogsBtn">清空日志</button>
+                        <button class="btn btn-sm" id="refreshLogsBtn" data-i18n>刷新日志</button>
+                        <button class="btn btn-sm" id="exportLogsBtn" data-i18n>导出日志</button>
+                        <button class="btn btn-sm" id="clearLogsBtn" data-i18n>清空日志</button>
                     </div>
                     <div class="log-viewer" id="logViewer">
-                        <div class="log-empty">日志未启用或暂无日志</div>
+                        <div class="log-empty" data-i18n>日志未启用或暂无日志</div>
                     </div>
                 </div>
 
@@ -430,52 +445,52 @@
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                        <span>代理设置</span>
+                        <span data-i18n>代理设置</span>
                     </div>
                     <div class="settings-toggle-row">
                         <div>
-                            <span class="settings-toggle-label">启用代理</span>
-                            <span class="settings-toggle-desc">开启后通过代理服务器访问 FOFA API，关闭则直连</span>
+                            <span class="settings-toggle-label" data-i18n>启用代理</span>
+                            <span class="settings-toggle-desc" data-i18n>开启后通过代理服务器访问 FOFA API，关闭则直连</span>
                         </div>
                         <label class="toggle-switch">
                             <input type="checkbox" id="proxyEnabled" onchange="handleProxyToggle(this.checked)">
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
-                    <p class="settings-section-desc">配置 HTTP/HTTPS/SOCKS5 代理</p>
+                    <p class="settings-section-desc" data-i18n>配置 HTTP/HTTPS/SOCKS5 代理</p>
                     <div class="settings-proxy-grid" id="proxyFieldsGrid">
                         <div class="settings-field">
-                            <label>主机地址</label>
+                            <label data-i18n>主机地址</label>
                             <input type="text" class="settings-input" id="proxyHost" placeholder="127.0.0.1">
                         </div>
                         <div class="settings-field">
-                            <label>端口</label>
+                            <label data-i18n>端口</label>
                             <input type="number" class="settings-input" id="proxyPort" placeholder="8080">
                         </div>
                         <div class="settings-field">
-                            <label>用户名（可选）</label>
-                            <input type="text" class="settings-input" id="proxyUsername" placeholder="可选">
+                            <label data-i18n>用户名（可选）</label>
+                            <input type="text" class="settings-input" id="proxyUsername" placeholder="可选" data-i18n-placeholder>
                         </div>
                         <div class="settings-field">
-                            <label>密码（可选）</label>
-                            <input type="password" class="settings-input" id="proxyPassword" placeholder="可选">
+                            <label data-i18n>密码（可选）</label>
+                            <input type="password" class="settings-input" id="proxyPassword" placeholder="可选" data-i18n-placeholder>
                         </div>
                     </div>
-                    <button class="btn btn-primary btn-sm" id="saveProxyBtn" onclick="saveProxySettings()" style="margin-top: 10px;">保存代理设置</button>
+                    <button class="btn btn-primary btn-sm" id="saveProxyBtn" onclick="saveProxySettings()" style="margin-top: 10px;" data-i18n>保存代理设置</button>
                 </div>
 
                 <!-- 请求设置 -->
                 <div class="settings-section">
                     <div class="settings-section-header">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                        <span>请求设置</span>
+                        <span data-i18n>请求设置</span>
                     </div>
-                    <p class="settings-section-desc">自定义 HTTP 请求头，发送给 FOFA API</p>
+                    <p class="settings-section-desc" data-i18n>自定义 HTTP 请求头，发送给 FOFA API</p>
 
                     <!-- FOFA 查询超时 -->
                     <div class="settings-field" style="margin-bottom: 12px;">
-                        <label>FOFA 查询超时（秒）</label>
-                        <p class="settings-toggle-desc">单个 API 请求的最大等待时间，超时后自动中止。默认 30，范围 5–300。</p>
+                        <label data-i18n>FOFA 查询超时（秒）</label>
+                        <p class="settings-toggle-desc" data-i18n>单个 API 请求的最大等待时间，超时后自动中止。默认 30，范围 5–300。</p>
                         <input type="number" class="settings-input" id="requestTimeout"
                                min="5" max="300" step="5" placeholder="30"
                                style="width: 120px; margin-top: 6px;">
@@ -486,21 +501,21 @@
                         <label>User-Agent</label>
                         <div style="display: flex; gap: 6px;">
                             <input type="text" class="settings-input" id="userAgent" placeholder="Mozilla/5.0 (compatible; FOFA-Leak-Search/1.1)" style="flex: 1;">
-                            <button class="btn btn-ghost btn-sm" onclick="resetUserAgent()" title="恢复默认" style="flex-shrink: 0;">默认</button>
+                            <button class="btn btn-ghost btn-sm" onclick="resetUserAgent()" title="恢复默认" style="flex-shrink: 0;" data-i18n-title data-i18n>默认</button>
                         </div>
                     </div>
 
                     <!-- 自定义 Headers -->
                     <div class="settings-field">
-                        <label>自定义 Headers</label>
-                        <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;">
+                        <label data-i18n>自定义 Headers</label>
+                        <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;" data-i18n>
                             每行一个，格式 <code>Header-Name: value</code>。伪头部（<code>:method</code>）、<code>Host</code>、<code>Content-Length</code> 等禁止设置。
                         </p>
                         <textarea class="settings-textarea" id="customHeaders" rows="4" placeholder="X-From: fofa-leak-search&#10;X-Request-Id: custom-id"></textarea>
                         <div class="settings-header-errors" id="headerErrors" style="display: none;"></div>
                     </div>
 
-                    <button class="btn btn-primary btn-sm" onclick="saveRequestConfig()" style="margin-top: 10px;">保存请求设置</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveRequestConfig()" style="margin-top: 10px;" data-i18n>保存请求设置</button>
                 </div>
             </div>
         </div>
@@ -509,17 +524,17 @@
     <!-- API Key 配置弹窗 -->
     <div class="modal-overlay" id="apiKeyModal">
         <div class="modal">
-            <h2 class="modal-title">API Key 配置
-                <button class="modal-close-btn" onclick="closeApiKeyModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;">
+            <h2 class="modal-title" data-i18n>API Key 配置
+                <button class="modal-close-btn" onclick="closeApiKeyModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;" data-i18n-title>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </h2>
-            <p class="modal-desc">
+            <p class="modal-desc" data-i18n>
                 请输入您的 FOFA API Key，保存在本地浏览器中。
             </p>
             <div class="modal-input-wrapper">
-                <input type="password" class="modal-input" id="apiKeyInput" placeholder="请输入 API Key">
-                <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" title="显示/隐藏">
+                <input type="password" class="modal-input" id="apiKeyInput" placeholder="请输入 API Key" data-i18n-placeholder>
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" title="显示/隐藏" data-i18n-title>
                     <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                         <circle cx="12" cy="12" r="3"></circle>
@@ -527,12 +542,12 @@
                 </button>
             </div>
             <div style="margin-bottom: 16px;">
-                <a onclick="window.openUrl('https://fofa.info/userInfo')" class="link" style="font-size: 13px; cursor: pointer;">
+                <a onclick="window.openUrl('https://fofa.info/userInfo')" class="link" style="font-size: 13px; cursor: pointer;" data-i18n>
                     前往 FOFA 个人中心获取 API Key →
                 </a>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-primary" onclick="saveApiKey()">保存</button>
+                <button class="btn btn-primary" onclick="saveApiKey()" data-i18n>保存</button>
             </div>
         </div>
     </div>
@@ -547,32 +562,32 @@
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                         </svg>
                     </span>
-                    <h2 class="modal-title fav-title">收藏查询</h2>
-                    <button class="modal-close-btn" onclick="closeFavoritesPanel()" title="关闭">
+                    <h2 class="modal-title fav-title" data-i18n>收藏查询</h2>
+                    <button class="modal-close-btn" onclick="closeFavoritesPanel()" title="关闭" data-i18n-title>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
-                <p class="modal-desc fav-subtitle">内置 FOFA 查询规则库，支持标签与关键词筛选，点击填充一键应用</p>
+                <p class="modal-desc fav-subtitle" data-i18n>内置 FOFA 查询规则库，支持标签与关键词筛选，点击填充一键应用</p>
             </header>
             <div class="fav-panel-header">
                 <input type="text" class="fav-search-input" id="favSearchInput" placeholder="搜索收藏的查询语句..."
-                       oninput="renderFavoritesList(this.value)">
+                       oninput="renderFavoritesList(this.value)" data-i18n-placeholder>
             </div>
             <div class="fav-chips" id="favChips"></div>
             <div class="fav-chips-actions" id="favChipsActions" style="display:none;">
-                <button class="fav-chips-toggle" id="favChipsToggle" title="展开/收起标签">展开 ▼</button>
+                <button class="fav-chips-toggle" id="favChipsToggle" title="展开/收起标签" data-i18n-title data-i18n>展开 ▼</button>
             </div>
             <div class="fav-list" id="favoritesList"></div>
             <div class="fav-empty" id="favoritesEmpty">
                 <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
-                <div class="fav-empty-title">暂无收藏</div>
-                <div class="fav-empty-desc">执行搜索后点击星标按钮即可收藏当前查询条件</div>
+                <div class="fav-empty-title" data-i18n>暂无收藏</div>
+                <div class="fav-empty-desc" data-i18n>执行搜索后点击星标按钮即可收藏当前查询条件</div>
             </div>
             <div class="fav-footer">
-                <span class="fav-count" id="favCount">0 条收藏</span>
-                <button class="btn btn-ghost btn-sm" id="favClearAllBtn" onclick="clearAllFavorites()">清除全部</button>
+                <span class="fav-count" id="favCount" data-i18n>0 条收藏</span>
+                <button class="btn btn-ghost btn-sm" id="favClearAllBtn" onclick="clearAllFavorites()" data-i18n>清除全部</button>
             </div>
         </div>
     </div>
@@ -580,34 +595,34 @@
             <!-- Icon Hash 计算弹窗 -->
     <div class="modal-overlay" id="iconHashModal">
         <div class="modal" style="max-width: 500px;">
-            <h2 class="modal-title">Icon Hash 计算
-                <button class="modal-close-btn" onclick="closeIconHashModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;">
+            <h2 class="modal-title" data-i18n>Icon Hash 计算
+                <button class="modal-close-btn" onclick="closeIconHashModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;" data-i18n-title>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </h2>
-            <p class="modal-desc">计算 favicon 的 FOFA icon_hash 值，使用 MurmurHash3 32-bit 算法</p>
+            <p class="modal-desc" data-i18n>计算 favicon 的 FOFA icon_hash 值，使用 MurmurHash3 32-bit 算法</p>
 
             <!-- URL 输入 -->
             <div class="iconhash-url-row">
-                <input type="text" id="iconHashUrlInput" placeholder="输入 favicon URL，如 https://example.com/favicon.ico" onkeydown="if(event.key==='Enter')fetchIconFromUrl()">
-                <button class="btn btn-primary btn-sm" style="padding:5px 12px; border-radius: 0 var(--radius) var(--radius) 0; flex-shrink: 0;" onclick="fetchIconFromUrl()">获取</button>
+                <input type="text" id="iconHashUrlInput" placeholder="输入 favicon URL，如 https://example.com/favicon.ico" onkeydown="if(event.key==='Enter')fetchIconFromUrl()" data-i18n-placeholder>
+                <button class="btn btn-primary btn-sm" style="padding:5px 12px; border-radius: 0 var(--radius) var(--radius) 0; flex-shrink: 0;" onclick="fetchIconFromUrl()" data-i18n>获取</button>
             </div>
 
             <!-- 文件拖拽上传 -->
             <div class="iconhash-dropzone" id="iconHashDropzone">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                <span>拖拽文件到此处，或 <span class="iconhash-upload-link" onclick="document.getElementById('iconHashFileInput').click()">点击上传</span></span>
+                <span data-i18n>拖拽文件到此处，或 <span class="iconhash-upload-link" onclick="document.getElementById('iconHashFileInput').click()" data-i18n>点击上传</span></span>
                 <input type="file" id="iconHashFileInput" accept=".ico,.png,image/x-icon,image/png" style="display:none;" onchange="handleIconFileSelect(event)">
             </div>
 
             <!-- 计算结果 -->
             <div class="iconhash-result" id="iconHashResult">
-                <div style="font-size:11px;color:var(--text-muted);">计算结果</div>
+                <div style="font-size:11px;color:var(--text-muted);" data-i18n>计算结果</div>
                 <div class="iconhash-value" id="iconHashValue">—</div>
                 <div class="iconhash-actions">
-                    <button class="btn btn-sm" onclick="copyIconHash()">📋 复制</button>
-                    <button class="btn btn-primary btn-sm" onclick="applyIconHashToQuery()">填入查询语句</button>
-                    <button class="btn btn-primary btn-sm" onclick="applyIconHashFilter()">填入筛选</button>
+                    <button class="btn btn-sm" onclick="copyIconHash()" data-i18n>📋 复制</button>
+                    <button class="btn btn-primary btn-sm" onclick="applyIconHashToQuery()" data-i18n>填入查询语句</button>
+                    <button class="btn btn-primary btn-sm" onclick="applyIconHashFilter()" data-i18n>填入筛选</button>
                 </div>
             </div>
         </div>
@@ -616,8 +631,8 @@
     <!-- 缓存管理弹窗 -->
     <div class="modal-overlay" id="cacheModal">
         <div class="modal">
-            <h2 class="modal-title">缓存管理
-                <button class="modal-close-btn" onclick="closeCacheModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;">
+            <h2 class="modal-title" data-i18n>缓存管理
+                <button class="modal-close-btn" onclick="closeCacheModal()" title="关闭" style="position: absolute; right: 20px; top: 20px;" data-i18n-title>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </h2>
@@ -625,37 +640,37 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div style="padding: 14px; background: var(--bg); border-radius: 8px; text-align: center;">
                         <div style="font-size: 22px; font-weight: 700; color: var(--primary);" id="cacheCount">0</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">缓存条数</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" data-i18n>缓存条数</div>
                     </div>
                     <div style="padding: 14px; background: var(--bg); border-radius: 8px; text-align: center;">
                         <div style="font-size: 22px; font-weight: 700; color: var(--success);" id="cacheExpiry">24h</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">有效期</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" data-i18n>有效期</div>
                     </div>
                 </div>
             </div>
             <div style="padding: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 12px;">
-                <p style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 10px;">导出缓存数据</p>
+                <p style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 10px;" data-i18n>导出缓存数据</p>
                 <div style="margin-bottom: 10px;">
-                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">选择查询（留空导出全部）</label>
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;" data-i18n>选择查询（留空导出全部）</label>
                     <select id="exportQuerySelect" style="width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); font-size: 12px;">
-                        <option value="">全部缓存数据</option>
+                        <option value="" data-i18n>全部缓存数据</option>
                     </select>
                 </div>
                 <div style="display: flex; gap: 6px;">
-                    <button class="btn btn-primary btn-sm" onclick="exportCacheData('csv')" style="flex: 1;">导出 CSV</button>
-                    <button class="btn btn-sm" onclick="exportCacheData('json')" style="flex: 1;">导出 JSON</button>
+                    <button class="btn btn-primary btn-sm" onclick="exportCacheData('csv')" style="flex: 1;" data-i18n>导出 CSV</button>
+                    <button class="btn btn-sm" onclick="exportCacheData('json')" style="flex: 1;" data-i18n>导出 JSON</button>
                 </div>
             </div>
             <div style="padding: 14px; background: var(--bg); border-radius: 8px; margin-bottom: 16px;">
-                <p style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">缓存说明</p>
+                <p style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;" data-i18n>缓存说明</p>
                 <ul style="font-size: 11px; color: var(--text-muted); list-style: none; line-height: 1.8;">
-                    <li>- 相同查询条件优先使用缓存数据</li>
-                    <li>- 基于查询语句、页码、每页数量、字段组合</li>
-                    <li>- 可降低 API 调用频率，节省 F 点消耗</li>
+                    <li data-i18n>- 相同查询条件优先使用缓存数据</li>
+                    <li data-i18n>- 基于查询语句、页码、每页数量、字段组合</li>
+                    <li data-i18n>- 可降低 API 调用频率，节省 F 点消耗</li>
                 </ul>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-primary" onclick="clearAllCache()">清除所有缓存</button>
+                <button class="btn btn-primary" onclick="clearAllCache()" data-i18n>清除所有缓存</button>
             </div>
         </div>
     </div>
@@ -663,10 +678,10 @@
     <!-- 使用统计弹窗 -->
     <div class="modal-overlay" id="usageModal">
         <div class="modal" style="max-width: 420px;">
-            <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px; position: relative;">
+            <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px; position: relative;" data-i18n>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
                 使用统计
-                <button class="modal-close-btn" onclick="closeUsageModal()" title="关闭" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
+                <button class="modal-close-btn" onclick="closeUsageModal()" title="关闭" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);" data-i18n-title>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </h2>
@@ -675,30 +690,30 @@
             <!-- 数据获取量配额 -->
             <div style="padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text);">📦 月度数据获取量</span>
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text);" data-i18n>📦 月度数据获取量</span>
                     <span style="font-size: 20px; font-weight: 700; color: var(--primary);" id="usageDataCount">0</span>
                 </div>
                 <div style="height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
                     <div id="usageQuotaBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), #6366f1); border-radius: 3px; transition: width 0.4s ease; width: 0%;"></div>
                 </div>
-                <div style="font-size: 11px; color: var(--text-muted);" id="usageQuotaText">加载中...</div>
+                <div style="font-size: 11px; color: var(--text-muted);" id="usageQuotaText" data-i18n>加载中...</div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                 <div style="text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 8px;">
                     <div style="font-size: 22px; font-weight: 700; color: var(--primary);" id="usageApiCalls">0</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">API 调用</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" data-i18n>API 调用</div>
                 </div>
                 <div style="text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 8px;">
                     <div style="font-size: 22px; font-weight: 700; color: var(--success);" id="usageDownloads">0</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">下载次数</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" data-i18n>下载次数</div>
                 </div>
                 <div style="text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 8px;">
                     <div style="font-size: 22px; font-weight: 700; color: var(--warning);" id="usageFPoints">0</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">消耗 F点</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" data-i18n>消耗 F点</div>
                 </div>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
+            <div style="font-size: 11px; color: var(--text-muted); text-align: center;" data-i18n>
                 统计数据按月清零，仅记录本机使用情况
             </div>
         </div>
@@ -707,7 +722,7 @@
     <!-- 关于弹窗 -->
     <div class="modal-overlay" id="aboutModal">
         <div class="modal" style="max-width: 380px; position: relative;">
-            <button class="modal-close-btn" onclick="closeAboutModal()" title="关闭" style="position: absolute; right: 20px; top: 20px; z-index: 1;">
+            <button class="modal-close-btn" onclick="closeAboutModal()" title="关闭" style="position: absolute; right: 20px; top: 20px; z-index: 1;" data-i18n-title>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
             <div class="about-content">
@@ -717,12 +732,12 @@
                 <div class="about-name">FOFA Leak Search</div>
                 <div class="about-version">v1.1.0</div>
                 <div class="about-info">
-                    <div>作者：<a onclick="window.openUrl('https://github.com/Mr-xn')" style="cursor:pointer"><strong>Mrxn</strong> ↗</a></div>
-                    <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search')" style="cursor:pointer">项目仓库 ↗</a></div>
-                    <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search/issues')" style="cursor:pointer">问题反馈 ↗</a></div>
-                    <div>数据来源：<a onclick="window.openUrl('https://fofa.info')" style="cursor:pointer">FOFA</a></div>
+                    <div data-i18n>作者：<a onclick="window.openUrl('https://github.com/Mr-xn')" style="cursor:pointer"><strong>Mrxn</strong> ↗</a></div>
+                    <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search')" style="cursor:pointer" data-i18n>项目仓库 ↗</a></div>
+                    <div><a onclick="window.openUrl('https://github.com/Mr-xn/fofa_leak_search/issues')" style="cursor:pointer" data-i18n>问题反馈 ↗</a></div>
+                    <div data-i18n>数据来源：<a onclick="window.openUrl('https://fofa.info')" style="cursor:pointer">FOFA</a></div>
                 </div>
-                <div class="about-copyright">
+                <div class="about-copyright" data-i18n>
                     © 2026 Mrxn · MIT License<br>
                     本工具仅用于安全研究与授权测试
                 </div>
@@ -734,7 +749,7 @@
     <div class="user-info-panel" id="userInfoPanel" onclick="event.stopPropagation()">
         <div class="panel-content" id="userInfoContent">
             <div style="text-align: center; padding: 40px 0;">
-                <p style="color: var(--text-muted); font-size: 13px;">请先配置 API Key</p>
+                <p style="color: var(--text-muted); font-size: 13px;" data-i18n>请先配置 API Key</p>
             </div>
         </div>
     </div>
@@ -745,31 +760,31 @@
     <!-- 下载进度展示区域（固定在右下角） -->
     <div class="download-progress" id="downloadProgress" style="display: none;">
         <div class="download-progress-header">
-            <span class="download-progress-title">📥 下载进度</span>
+            <span class="download-progress-title" data-i18n>📥 下载进度</span>
             <button class="download-progress-close" onclick="window.hideDownloadProgress()">&times;</button>
         </div>
         <div class="download-progress-body">
-            <div class="download-progress-status" id="downloadStatus">准备中...</div>
+            <div class="download-progress-status" id="downloadStatus" data-i18n>准备中...</div>
             <div class="download-progress-bar-container">
                 <div class="download-progress-bar" id="downloadProgressBar"></div>
             </div>
-            <div class="download-progress-info" id="downloadInfo">0 / 0 页</div>
+            <div class="download-progress-info" id="downloadInfo" data-i18n>0 / 0 页</div>
         </div>
     </div>
 
     <!-- 智能下载弹窗 -->
     <div class="modal-overlay" id="smartDownloadModal">
         <div class="modal smart-modal" id="smartModalEl">
-            <h2 class="modal-title">智能分片下载</h2>
+            <h2 class="modal-title" data-i18n>智能分片下载</h2>
 
             <div class="smart-modal-body">
                 <!-- 阶段 1：查询分析 -->
                 <div class="smart-phase" id="smartPhaseAnalyze">
-                    <div class="smart-phase-title">
+                    <div class="smart-phase-title" data-i18n>
                         <span class="phase-icon phase-pending" id="smartPhaseAnalyzeIcon">1</span>
                         查询分析
                     </div>
-                    <div class="smart-info-box" id="smartAnalyzeInfo">
+                    <div class="smart-info-box" id="smartAnalyzeInfo" data-i18n>
                         点击「开始分析」统计当前查询的数据分布
                     </div>
                 </div>
@@ -777,7 +792,7 @@
                 <!-- 阶段 2：拆分方案（分析完成后显示） -->
                 <div class="smart-phase" id="smartPhasePlan" style="display: none;">
                     <div class="smart-plan-header">
-                        <div class="smart-phase-title" style="margin-bottom: 0;">
+                        <div class="smart-phase-title" style="margin-bottom: 0;" data-i18n>
                             <span class="phase-icon phase-running" id="smartPhasePlanIcon">2</span>
                             拆分方案
                         </div>
@@ -790,7 +805,7 @@
                 <div class="smart-phase" id="smartPhasePrefetch" style="display: none;">
                     <div class="phase-header">
                         <span class="phase-icon phase-pending" id="smartPhasePrefetchIcon">3</span>
-                        <div class="phase-title">预查校验</div>
+                        <div class="phase-title" data-i18n>预查校验</div>
                         <span class="smart-plan-badge" id="smartPrefetchBadge"></span>
                     </div>
                     <div class="smart-info-box" id="smartPrefetchInfo" style="display: none;"></div>
@@ -798,14 +813,14 @@
 
                 <!-- 阶段 4：执行下载 -->
                 <div class="smart-phase" id="smartPhaseExecute" style="display: none;">
-                    <div class="smart-phase-title">
+                    <div class="smart-phase-title" data-i18n>
                         <span class="phase-icon phase-pending" id="smartPhaseExecuteIcon">4</span>
                         执行下载
                     </div>
                     <div class="smart-progress-bar">
                         <div class="smart-progress-bar-inner" id="smartProgressBar"></div>
                     </div>
-                    <div class="smart-info-box" id="smartExecuteInfo">等待执行...</div>
+                    <div class="smart-info-box" id="smartExecuteInfo" data-i18n>等待执行...</div>
                 </div>
 
                 <!-- 结果摘要 -->
@@ -813,29 +828,29 @@
                     <div class="smart-result-summary">
                         <div class="smart-result-card">
                             <div class="num" style="color: var(--primary);" id="smartTotalFetched">0</div>
-                            <div class="lbl">总获取</div>
+                            <div class="lbl" data-i18n>总获取</div>
                         </div>
                         <div class="smart-result-card">
                             <div class="num" style="color: var(--success);" id="smartUniqueCount">0</div>
-                            <div class="lbl">去重后</div>
+                            <div class="lbl" data-i18n>去重后</div>
                         </div>
                         <div class="smart-result-card">
                             <div class="num" style="color: var(--warning);" id="smartDuplicateCount">0</div>
-                            <div class="lbl">重复数</div>
+                            <div class="lbl" data-i18n>重复数</div>
                         </div>
                         <div class="smart-result-card">
                             <div class="num" style="color: var(--text);" id="smartStepsInfo">0/0</div>
-                            <div class="lbl">完成步骤</div>
+                            <div class="lbl" data-i18n>完成步骤</div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeSmartDownload()">关闭</button>
-                <button class="btn btn-primary" id="smartStartBtn" onclick="startSmartDownload()">开始分析</button>
-                <button class="btn btn-primary" id="smartExecuteBtn" onclick="executeSmartDownload()" style="display: none;">执行下载</button>
-                <button class="btn btn-primary" id="smartExportBtn" onclick="exportSmartResults()" style="display: none;">导出 CSV</button>
+                <button class="btn btn-secondary" onclick="closeSmartDownload()" data-i18n>关闭</button>
+                <button class="btn btn-primary" id="smartStartBtn" onclick="startSmartDownload()" data-i18n>开始分析</button>
+                <button class="btn btn-primary" id="smartExecuteBtn" onclick="executeSmartDownload()" style="display: none;" data-i18n>执行下载</button>
+                <button class="btn btn-primary" id="smartExportBtn" onclick="exportSmartResults()" style="display: none;" data-i18n>导出 CSV</button>
             </div>
         </div>
     </div>
@@ -846,8 +861,8 @@
             <h3 id="confirmTitle" style="font-size: 16px; font-weight: 600; margin-bottom: 12px; display: none;"></h3>
             <p id="confirmMessage" style="font-size: 14px; line-height: 1.7; margin-bottom: 20px; white-space: pre-wrap;"></p>
             <div class="modal-actions" style="justify-content: center; gap: 10px;">
-                <button class="btn" id="confirmCancelBtn">取消</button>
-                <button class="btn btn-primary" id="confirmOkBtn">继续</button>
+                <button class="btn" id="confirmCancelBtn" data-i18n>取消</button>
+                <button class="btn btn-primary" id="confirmOkBtn" data-i18n>继续</button>
             </div>
         </div>
     </div>

@@ -9,6 +9,7 @@ import { getSelectedFields, showApiKeyModal, getFilterQuery, getActiveFiltersDat
 import { renderTable, renderPagination } from './results.js';
 import { loadStats } from './stats.js';
 import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
+import { t } from './i18n/index.js';
 
 // ==================== 查询可提交性判断 ====================
 /**
@@ -59,7 +60,7 @@ export function showSuggestions() {
             <span class="suggestion-query">${escapeHtml(item.query)}</span>
             <span class="suggestion-meta">
                 ${formatTime(item.time)}
-                <button class="suggestion-delete" data-query="${encodeURIComponent(item.query)}">删除</button>
+                <button class="suggestion-delete" data-query="${encodeURIComponent(item.query)}">${t('删除')}</button>
             </span>
         </div>
     `).join('');
@@ -86,7 +87,7 @@ export async function doSearch() {
     let query = input.value.trim();
 
     if (!isSearchSubmittable(query)) {
-        showToast('请输入查询语句', 'error');
+        showToast(t('请输入查询语句'), 'error');
         return;
     }
 
@@ -195,7 +196,7 @@ export async function fetchResults() {
 
             if (data.error) {
                 logWarn('search', 'FOFA 查询返回错误', { errmsg: data.errmsg, errcode: data.errcode, query: state.currentQuery });
-                showToast(`查询错误: ${data.errmsg}`, 'error');
+                showToast(t('查询错误: {{errmsg}}', { errmsg: data.errmsg }), 'error');
                 loading.classList.remove('show');
                 emptyState.style.display = 'block';
                 state.isLoading = false;
@@ -214,7 +215,7 @@ export async function fetchResults() {
             incrementDataCount(data.results?.length || 0);
         } catch (error) {
             logError('search', '搜索请求网络错误', { message: error.message, query: state.currentQuery });
-            showToast(`网络错误: ${error.message}`, 'error');
+            showToast(t('网络错误: {{message}}', { message: error.message }), 'error');
             loading.classList.remove('show');
             emptyState.style.display = 'block';
             state.isLoading = false;
@@ -236,8 +237,8 @@ export async function fetchResults() {
     // 更新统计信息
     document.getElementById('totalResults').textContent = formatNumber(state.totalResults);
     document.getElementById('currentPage').textContent = state.currentPage;
-    document.getElementById('consumedFpoint').textContent = fromCache ? '0 (缓存)' : (data.consumed_fpoint || 0);
-    document.getElementById('queryTime').textContent = fromCache ? '< 1ms (缓存)' : `${Date.now() - state.startTime}ms`;
+    document.getElementById('consumedFpoint').textContent = fromCache ? t('0 (缓存)') : (data.consumed_fpoint || 0);
+    document.getElementById('queryTime').textContent = fromCache ? t('< 1ms (缓存)') : `${Date.now() - state.startTime}ms`;
 
     // 配额警告：检查剩余免费数据配额
     const quotaWarningEl = document.getElementById('quotaWarning');
@@ -247,11 +248,11 @@ export async function fetchResults() {
         const usedData = data.size || 0;
         if (remainApiData <= 0) {
             quotaWarningEl.style.display = '';
-            quotaWarningTextEl.textContent = '⚠️ 免费配额已用尽，将消耗F点';
+            quotaWarningTextEl.textContent = t('⚠️ 免费配额已用尽，将消耗F点');
             quotaWarningTextEl.style.color = 'var(--error)';
         } else if (remainApiData < parseInt(pageSize)) {
             quotaWarningEl.style.display = '';
-            quotaWarningTextEl.textContent = `⚠️ 剩余配额 ${formatNumber(remainApiData)} 条，本页已超`;
+            quotaWarningTextEl.textContent = t('⚠️ 剩余配额 {{n}} 条，本页已超', { n: formatNumber(remainApiData) });
             quotaWarningTextEl.style.color = 'var(--warning)';
         } else {
             quotaWarningEl.style.display = 'none';
@@ -268,8 +269,8 @@ export async function fetchResults() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
             </svg>
-            <h3>未找到结果</h3>
-            <p>尝试修改查询语句或调整筛选条件</p>
+            <h3>${t('未找到结果')}</h3>
+            <p>${t('尝试修改查询语句或调整筛选条件')}</p>
         `;
         emptyState.style.display = 'block';
         state.isLoading = false;
@@ -291,7 +292,7 @@ export async function fetchResults() {
     }
 
     if (fromCache) {
-        showToast('已使用缓存数据', 'info');
+        showToast(t('已使用缓存数据'), 'info');
     }
 
     state.isLoading = false;

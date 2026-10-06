@@ -5,6 +5,7 @@ import { fetchStats } from './api.js';
 import { formatNumber, escapeHtml, showToast } from './utils.js';
 import { downloadNodeScreenshot } from './screenshot.js';
 import { error as logError } from './logger.js';
+import { t } from './i18n/index.js';
 
 // 统计聚合支持的字段
 export const STATS_FIELDS = ['protocol', 'port', 'country', 'domain', 'os', 'server', 'org', 'asn', 'asset_type', 'title', 'fid', 'icp'];
@@ -58,7 +59,7 @@ export async function loadStats() {
     }
 
     // 显示加载状态
-    statsContent.innerHTML = '<div class="stats-loading">正在加载统计信息...</div>';
+    statsContent.innerHTML = `<div class="stats-loading">${t('正在加载统计信息...')}</div>`;
     showStatsPanel();
 
     try {
@@ -66,7 +67,7 @@ export async function loadStats() {
         const data = await fetchStats(state.currentQuery, STATS_FIELDS.join(','), state.searchFull || false);
 
         if (data.error) {
-            statsContent.innerHTML = `<div class="stats-error">加载失败: ${escapeHtml(data.errmsg)}</div>`;
+            statsContent.innerHTML = `<div class="stats-error">${escapeHtml(t('加载失败: {{message}}', { message: data.errmsg }))}</div>`;
             return;
         }
 
@@ -85,7 +86,7 @@ export async function loadStats() {
 
         renderStats(data);
     } catch (error) {
-        statsContent.innerHTML = `<div class="stats-error">加载失败: ${escapeHtml(error.message)}</div>`;
+        statsContent.innerHTML = `<div class="stats-error">${escapeHtml(t('加载失败: {{message}}', { message: error.message }))}</div>`;
     }
 }
 
@@ -95,36 +96,36 @@ export function renderStats(data) {
     if (!statsContent) return;
 
     if (!data.aggs) {
-        statsContent.innerHTML = '<div class="stats-loading">无统计数据</div>';
+        statsContent.innerHTML = `<div class="stats-loading">${t('无统计数据')}</div>`;
         return;
     }
 
     const entries = Object.entries(data.aggs);
     if (entries.length === 0) {
-        statsContent.innerHTML = '<div class="stats-loading">无统计数据</div>';
+        statsContent.innerHTML = `<div class="stats-loading">${t('无统计数据')}</div>`;
         return;
     }
 
     let html = '';
 
     // 基本信息
-    html += `<div class="stats-summary">共 ${formatNumber(data.size)} 条资产`;
+    html += `<div class="stats-summary">${t('共 {{n}} 条资产', { n: formatNumber(data.size) })}`;
 
     if (data.distinct) {
         const distinctParts = [];
-        if (data.distinct.ip) distinctParts.push(`${data.distinct.ip} 个独立IP`);
-        if (data.distinct.title) distinctParts.push(`${data.distinct.title} 个独立标题`);
-        if (data.distinct.domain) distinctParts.push(`${data.distinct.domain} 个独立域名`);
-        if (data.distinct.server) distinctParts.push(`${data.distinct.server} 个独立Server`);
-        if (data.distinct.icp) distinctParts.push(`${data.distinct.icp} 个独立ICP`);
-        if (data.distinct.fid) distinctParts.push(`${data.distinct.fid} 个独立FID`);
+        if (data.distinct.ip) distinctParts.push(t('{{n}} 个独立IP', { n: data.distinct.ip }));
+        if (data.distinct.title) distinctParts.push(t('{{n}} 个独立标题', { n: data.distinct.title }));
+        if (data.distinct.domain) distinctParts.push(t('{{n}} 个独立域名', { n: data.distinct.domain }));
+        if (data.distinct.server) distinctParts.push(t('{{n}} 个独立Server', { n: data.distinct.server }));
+        if (data.distinct.icp) distinctParts.push(t('{{n}} 个独立ICP', { n: data.distinct.icp }));
+        if (data.distinct.fid) distinctParts.push(t('{{n}} 个独立FID', { n: data.distinct.fid }));
         if (distinctParts.length > 0) {
             html += ' · ' + distinctParts.join(' · ');
         }
     }
 
     if (data.lastupdatetime) {
-        html += ` · 数据更新: ${data.lastupdatetime}`;
+        html += ` · ${t('数据更新: {{time}}', { time: data.lastupdatetime })}`;
     }
     html += '</div>';
 
@@ -146,9 +147,9 @@ export function renderStatsCard(field, items, totalSize) {
     const rows = items.map(item => {
         const barWidth = maxCount > 0 ? Math.max(2, (item.count / maxCount) * 100) : 0;
         const percent = totalSize > 0 ? ((item.count / totalSize) * 100).toFixed(1) : '0';
-        const name = item.name || '(空)';
+        const name = item.name || t('(空)');
         return `
-            <div class="stats-item-row" title="${escapeHtml(name)}: ${formatNumber(item.count)} 条 (${percent}%)">
+            <div class="stats-item-row" title="${escapeHtml(t('{{name}}: {{count}} 条 ({{percent}}%)', { name, count: formatNumber(item.count), percent }))}">
                 <div class="stats-item-bar-wrapper">
                     <div class="stats-item-name">${escapeHtml(name)}</div>
                     <div class="stats-item-bar-bg">
@@ -163,7 +164,7 @@ export function renderStatsCard(field, items, totalSize) {
 
     return `
         <div class="stats-card">
-            <div class="stats-card-title">${FIELD_NAMES[field] || field}</div>
+            <div class="stats-card-title">${t(FIELD_NAMES[field] || field)}</div>
             <div class="stats-card-body">${rows}</div>
         </div>
     `;
@@ -217,7 +218,7 @@ export function toggleStats() {
 // ==================== 刷新统计 ====================
 export function refreshStats() {
     if (!state.currentQuery || !state.apiKey) {
-        showToast('请先执行搜索', 'error');
+        showToast(t('请先执行搜索'), 'error');
         return;
     }
     // 清除缓存，强制重新加载
@@ -233,19 +234,19 @@ export function refreshStats() {
 export async function downloadStatsScreenshot() {
     const node = document.getElementById('statsContent');
     if (!node) {
-        showToast('暂无统计数据', 'info');
+        showToast(t('暂无统计数据'), 'info');
         return;
     }
     // 加载中态判断：节点内只剩/包含 .stats-loading 占位
     if (node.querySelector('.stats-loading')) {
-        showToast('暂无统计数据', 'info');
+        showToast(t('暂无统计数据'), 'info');
         return;
     }
     try {
         await downloadNodeScreenshot(node, 'fofa_stats');
-        showToast('已下载统计截图', 'success');
+        showToast(t('已下载统计截图'), 'success');
     } catch (e) {
         logError('stats', '截图下载失败', { message: e.message || String(e) });
-        showToast(`截图失败: ${e.message || e}`, 'error');
+        showToast(t('截图失败: {{message}}', { message: e.message || e }), 'error');
     }
 }

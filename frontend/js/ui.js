@@ -2,10 +2,11 @@
 
 import { state, STORAGE_KEYS, FIELD_LABELS, DEFAULT_FIELDS, FIELDS_CONFIG, FILTERS_CONFIG, VIP_LEVEL_MAP } from './config.js';
 import { showToast, showConfirm, formatCacheExpiry, escapeHtml, saveTextFile } from './utils.js';
-import { clearAllCache, getCacheStats, getCachedQueries, getAllCachedData, exportToCSV, exportToJSON } from './storage.js';
+import { getCacheStats, getCachedQueries, getAllCachedData, exportToCSV, exportToJSON } from './storage.js';
 import { setProxyConfig, getProxyConfig as getTauriProxyConfig, setRequestConfig, getRequestConfig } from './tauri-bridge.js';
 import { getLogs, clearLogs, exportLogs, isLoggingEnabled, getLogLevel, info as logInfo, warn as logWarn } from './logger.js';
 import { persistWithEviction, evictOldest } from './quota.js';
+import { t } from './i18n/index.js';
 
 // 延迟导入 search.js 中的函数，避免循环依赖
 let _updateSearchButtonState = null;
@@ -53,13 +54,13 @@ export function togglePasswordVisibility() {
 export function saveApiKey() {
     const apiKey = document.getElementById('apiKeyInput').value.trim();
     if (!apiKey) {
-        showToast('请输入 API Key', 'error');
+        showToast(t('请输入 API Key'), 'error');
         return;
     }
     state.apiKey = apiKey;
     localStorage.setItem(STORAGE_KEYS.apiKey, apiKey);
     closeApiKeyModal();
-    showToast('API Key 保存成功', 'success');
+    showToast(t('API Key 保存成功'), 'success');
 }
 
 // ==================== 设置弹窗 ====================
@@ -142,7 +143,7 @@ export function renderLogViewer() {
     if (!viewer) return;
     const logs = getLogs().slice(-100).reverse();
     if (logs.length === 0) {
-        viewer.innerHTML = '<div class="log-empty">日志未启用或暂无日志</div>';
+        viewer.innerHTML = `<div class="log-empty">${t('日志未启用或暂无日志')}</div>`;
         return;
     }
     viewer.innerHTML = logs.map(entry => `
@@ -161,7 +162,7 @@ export function renderLogViewer() {
 export function clearDiagnosticLogs() {
     clearLogs();
     renderLogViewer();
-    showToast('诊断日志已清空', 'success');
+    showToast(t('诊断日志已清空'), 'success');
 }
 
 export async function exportDiagnosticLogs() {
@@ -173,28 +174,29 @@ export async function exportDiagnosticLogs() {
         const { path, dirFallback, fallbackReason } = await saveTextFile(filename, content, 'application/json;charset=utf-8');
         if (fallbackReason) {
             logWarn('export', '原生保存失败，已降级浏览器下载', { filename, reason: fallbackReason });
-            showToast(`诊断日志已导出（原生保存失败已降级浏览器下载: ${fallbackReason}）`, 'warning');
+            showToast(t('诊断日志已导出（原生保存失败已降级浏览器下载: {{reason}}）', { reason: fallbackReason }), 'warning');
             return;
         }
         if (dirFallback) {
-            showToast(`保存位置不可用，诊断日志已保存到系统「下载」目录: ${path}`, 'warning');
+            showToast(t('保存位置不可用，诊断日志已保存到系统「下载」目录: {{path}}', { path }), 'warning');
         } else {
-            showToast(`诊断日志已导出${path ? ' → ' + path : ''}`, 'success');
+            const suffix = path ? ' → ' + path : '';
+            showToast(t('诊断日志已导出{{suffix}}', { suffix }), 'success');
         }
     } catch (e) {
-        showToast(`导出失败: ${e.message || e}`, 'error');
+        showToast(t('导出失败: {{message}}', { message: e.message || e }), 'error');
     }
 }
 
 export function saveSettingsApiKey() {
     const apiKey = document.getElementById('settingsApiKeyInput').value.trim();
     if (!apiKey) {
-        showToast('请输入 API Key', 'error');
+        showToast(t('请输入 API Key'), 'error');
         return;
     }
     state.apiKey = apiKey;
     localStorage.setItem(STORAGE_KEYS.apiKey, apiKey);
-    showToast('API Key 保存成功', 'success');
+    showToast(t('API Key 保存成功'), 'success');
 }
 
 export function toggleSettingsPassword() {
@@ -254,13 +256,13 @@ export async function saveProxySettings() {
     }
 
     if (!enabled) {
-        showToast('代理已禁用', 'success');
+        showToast(t('代理已禁用'), 'success');
     } else if (host && port) {
-        showToast(`代理设置已保存: ${host}:${port}`, 'success');
+        showToast(t('代理设置已保存: {{host}}:{{port}}', { host, port }), 'success');
     } else if (!host && !port) {
-        showToast('代理设置已清除', 'success');
+        showToast(t('代理设置已清除'), 'success');
     } else {
-        showToast('代理设置已保存（主机和端口需同时填写才生效）', 'info');
+        showToast(t('代理设置已保存（主机和端口需同时填写才生效）'), 'info');
     }
 }
 
@@ -318,7 +320,7 @@ export function toggleProxyEnabled(enabled) {
     }
 
     if (btn) {
-        btn.textContent = enabled ? '保存代理设置' : '保存并禁用代理';
+        btn.textContent = enabled ? t('保存代理设置') : t('保存并禁用代理');
     }
 }
 
@@ -345,7 +347,7 @@ function validateCustomHeaders(text) {
 
         const colonIdx = line.indexOf(':');
         if (colonIdx === -1) {
-            errors.push(`第 ${i + 1} 行格式错误（缺少冒号）: ${line}`);
+            errors.push(t('第 {{lineNo}} 行格式错误（缺少冒号）: {{line}}', { lineNo: i + 1, line }));
             continue;
         }
 
@@ -353,32 +355,32 @@ function validateCustomHeaders(text) {
         const value = line.substring(colonIdx + 1).trim();
 
         if (!name) {
-            errors.push(`第 ${i + 1} 行 header 名称为空`);
+            errors.push(t('第 {{lineNo}} 行 header 名称为空', { lineNo: i + 1 }));
             continue;
         }
 
         if (name.startsWith(':')) {
-            errors.push(`第 ${i + 1} 行禁止伪头部: ${name}`);
+            errors.push(t('第 {{lineNo}} 行禁止伪头部: {{name}}', { lineNo: i + 1, name }));
             continue;
         }
 
         if (forbidden.includes(name.toLowerCase())) {
-            errors.push(`第 ${i + 1} 行禁止手动设置: ${name}`);
+            errors.push(t('第 {{lineNo}} 行禁止手动设置: {{name}}', { lineNo: i + 1, name }));
             continue;
         }
 
         if (!/^[A-Za-z0-9\-_]+$/.test(name)) {
-            errors.push(`第 ${i + 1} 行非法 header 名称（仅允许字母、数字、-、_）: ${name}`);
+            errors.push(t('第 {{lineNo}} 行非法 header 名称（仅允许字母、数字、-、_）: {{name}}', { lineNo: i + 1, name }));
             continue;
         }
 
         if (/[\r\n]/.test(value)) {
-            errors.push(`第 ${i + 1} 行 header 值包含非法换行符: ${name}`);
+            errors.push(t('第 {{lineNo}} 行 header 值包含非法换行符: {{name}}', { lineNo: i + 1, name }));
             continue;
         }
 
         if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value)) {
-            errors.push(`第 ${i + 1} 行 header 值包含控制字符: ${name}`);
+            errors.push(t('第 {{lineNo}} 行 header 值包含控制字符: {{name}}', { lineNo: i + 1, name }));
             continue;
         }
 
@@ -402,7 +404,7 @@ export async function saveRequestConfig() {
     if (errors.length > 0) {
         errorDiv.textContent = errors.join('\n');
         errorDiv.style.display = 'block';
-        showToast('自定义 Headers 格式有误，请修正', 'error');
+        showToast(t('自定义 Headers 格式有误，请修正'), 'error');
         return;
     }
     errorDiv.style.display = 'none';
@@ -422,10 +424,10 @@ export async function saveRequestConfig() {
     try {
         const result = await setRequestConfig(userAgent, headers);
         console.log('[RequestConfig]', result);
-        showToast('请求设置已保存', 'success');
+        showToast(t('请求设置已保存'), 'success');
     } catch (e) {
         console.warn('[RequestConfig] 同步到 Rust 侧失败:', e);
-        showToast('请求设置已保存（本地），Rust 同步失败: ' + (e.message || e), 'error');
+        showToast(t('请求设置已保存（本地），Rust 同步失败: ') + (e.message || e), 'error');
     }
 }
 
@@ -480,7 +482,7 @@ export function exportConfigToFile() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast(`配置已导出到 ${filename}`, 'success');
+    showToast(t('配置已导出到 {{filename}}', { filename }), 'success');
 }
 
 // 从文件导入配置（支持 Base64 编码的 txt 或 JSON 文件）
@@ -510,7 +512,7 @@ export function importConfigFromFile() {
 
                 await applyConfig(config, file.name);
             } catch (err) {
-                showToast('配置文件格式无效', 'error');
+                showToast(t('配置文件格式无效'), 'error');
             }
         };
         reader.readAsText(file);
@@ -612,7 +614,7 @@ function mergeHistory(rawHistory, localHistory) {
  */
 export async function applyConfig(config, source) {
     if (!config.version || !config.data) {
-        showToast('无效的配置数据', 'error');
+        showToast(t('无效的配置数据'), 'error');
         return;
     }
 
@@ -626,18 +628,18 @@ export async function applyConfig(config, source) {
             localStorage.setItem(STORAGE_KEYS.apiKey, data.apiKey);
         } else {
             const confirmed = await showConfirm({
-                title: '覆盖 API Key？',
-                message: `配置文件里的 API Key 尾号 <strong>${escapeHtml(data.apiKey.slice(-4))}</strong>，`
-                    + `与本机当前 Key（尾号 <strong>${escapeHtml(currentKey.slice(-4))}</strong>）不同。`,
-                confirmText: '覆盖',
-                cancelText: '保留当前',
+                title: t('覆盖 API Key？'),
+                message: t('配置文件里的 API Key 尾号 <strong>{{keyTail}}</strong>，', { keyTail: escapeHtml(data.apiKey.slice(-4)) })
+                    + t('与本机当前 Key（尾号 <strong>{{currentTail}}</strong>）不同。', { currentTail: escapeHtml(currentKey.slice(-4)) }),
+                confirmText: t('覆盖'),
+                cancelText: t('保留当前'),
                 defaultFocus: 'cancel'
             });
             if (confirmed) {
                 localStorage.setItem(STORAGE_KEYS.apiKey, data.apiKey);
-                notes.push('API Key 已覆盖');
+                notes.push(t('API Key 已覆盖'));
             } else {
-                notes.push('API Key 保留本机');
+                notes.push(t('API Key 保留本机'));
             }
         }
     }
@@ -683,9 +685,10 @@ export async function applyConfig(config, source) {
             );
             if (result.entries !== merged) state.favorites = result.entries;
 
-            notes.push(`收藏新增 ${added} 条${skipped > 0 ? `、跳过 ${skipped} 条重复` : ''}`);
-            if (result.dropped > 0) notes.push(`空间不足淘汰 ${result.dropped} 条最旧收藏`);
-            if (!result.ok) notes.push('收藏写入失败');
+            const skippedNote = skipped > 0 ? t('、跳过 {{skipped}} 条重复', { skipped }) : '';
+            notes.push(t('收藏新增 {{added}} 条{{extra}}', { added, extra: skippedNote }));
+            if (result.dropped > 0) notes.push(t('空间不足淘汰 {{dropped}} 条最旧收藏', { dropped: result.dropped }));
+            if (!result.ok) notes.push(t('收藏写入失败'));
         }
     }
 
@@ -701,13 +704,13 @@ export async function applyConfig(config, source) {
             );
             if (result.entries !== merged) state.searchHistory = result.entries;
 
-            notes.push(`历史新增 ${added} 条`);
-            if (!result.ok) notes.push('历史写入失败');
+            notes.push(t('历史新增 {{added}} 条', { added }));
+            if (!result.ok) notes.push(t('历史写入失败'));
         }
     }
 
-    const summary = notes.length > 0 ? `：${notes.join('；')}` : '';
-    showToast(`配置从 ${source} 导入成功${summary}，页面将刷新`, 'success');
+    const summary = notes.length > 0 ? t('：') + notes.join(t('；')) : '';
+    showToast(t('配置从 {{source}} 导入成功{{summary}}，页面将刷新', { source, summary }), 'success');
 
     // 刷新页面以应用配置
     setTimeout(() => {
@@ -740,7 +743,7 @@ async function loadExportQueryList() {
     const queries = await getCachedQueries();
 
     // 保留第一个选项，清空其余
-    select.innerHTML = '<option value="">全部缓存数据</option>';
+    select.innerHTML = `<option value="">${t('全部缓存数据')}</option>`;
 
     queries.forEach(item => {
         const option = document.createElement('option');
@@ -749,7 +752,7 @@ async function loadExportQueryList() {
         const displayQuery = item.query.length > 50
             ? item.query.substring(0, 50) + '...'
             : item.query;
-        option.textContent = `${displayQuery} (${item.count}条)`;
+        option.textContent = t('{{query}} ({{count}}条)', { query: displayQuery, count: item.count });
         select.appendChild(option);
     });
 }
@@ -759,12 +762,12 @@ export async function exportCacheData(format) {
     const select = document.getElementById('exportQuerySelect');
     const queryFilter = select ? select.value : null;
 
-    showToast('正在准备导出数据...', 'info');
+    showToast(t('正在准备导出数据...'), 'info');
 
     const cachedEntries = await getAllCachedData(queryFilter || null);
 
     if (!cachedEntries || cachedEntries.length === 0) {
-        showToast('没有可导出的缓存数据', 'error');
+        showToast(t('没有可导出的缓存数据'), 'error');
         return;
     }
 
@@ -789,7 +792,7 @@ export async function exportCacheData(format) {
     });
 
     if (allResults.length === 0) {
-        showToast('缓存中没有结果数据', 'error');
+        showToast(t('缓存中没有结果数据'), 'error');
         return;
     }
 
@@ -808,9 +811,9 @@ export async function exportCacheData(format) {
     }
 
     if (success) {
-        showToast(`成功导出 ${allResults.length} 条数据`, 'success');
+        showToast(t('成功导出 {{count}} 条数据', { count: allResults.length }), 'success');
     } else {
-        showToast('导出失败', 'error');
+        showToast(t('导出失败'), 'error');
     }
 }
 
@@ -858,7 +861,7 @@ export function initFieldTags() {
 
     FIELDS_CONFIG.forEach(f => {
         // 根据权限等级分组显示
-        const group = f.level === 0 ? '免费' : (f.desc || VIP_LEVEL_MAP[f.level]);
+        const group = f.level === 0 ? t('免费') : t(f.desc || VIP_LEVEL_MAP[f.level]);
         if (group !== currentGroup) {
             if (currentGroup) {
                 html += '<div style="height: 1px; background: var(--border); margin: 4px 0;"></div>';
@@ -874,7 +877,7 @@ export function initFieldTags() {
         html += `
             <div class="field-option ${disabledClass}" data-field="${f.field}" data-level="${f.level}" ${disabledAttr}>
                 <span class="checkbox"></span>
-                <span>${f.label}${lockIcon}</span>
+                <span>${t(f.label)}${lockIcon}</span>
             </div>
         `;
     });
@@ -982,7 +985,7 @@ function updateSelectedTags(fields) {
 
     container.innerHTML = fields.map(field => `
         <span class="field-tag-small">
-            ${escapeHtml(FIELD_LABELS[field] || field)}
+            ${escapeHtml(t(FIELD_LABELS[field] || field))}
             <span class="remove-field" data-field="${escapeHtml(field)}">&times;</span>
         </span>
     `).join('');
@@ -1005,11 +1008,11 @@ function updateDropdownText(fields) {
     if (!textEl) return;
 
     if (fields.length === 0) {
-        textEl.textContent = '未选择字段';
+        textEl.textContent = t('未选择字段');
     } else if (fields.length <= 3) {
-        textEl.textContent = fields.map(f => FIELD_LABELS[f] || f).join('、');
+        textEl.textContent = fields.map(f => t(FIELD_LABELS[f] || f)).join(t('、'));
     } else {
-        textEl.textContent = `已选择 ${fields.length} 个字段`;
+        textEl.textContent = t('已选择 {{count}} 个字段', { count: fields.length });
     }
 }
 
@@ -1096,31 +1099,31 @@ export function initQuickFilters() {
     let html = '';
 
     // 基础类
-    html += renderFilterSection('基础查询', FILTERS_CONFIG.general, vipLevel, 'input');
-    html += renderFilterSection('基础筛选', FILTERS_CONFIG.generalBool, vipLevel, 'bool');
+    html += renderFilterSection(t('基础查询'), FILTERS_CONFIG.general, vipLevel, 'input');
+    html += renderFilterSection(t('基础筛选'), FILTERS_CONFIG.generalBool, vipLevel, 'bool');
 
     // 标记类
-    html += renderFilterSection('应用/产品', FILTERS_CONFIG.labels, vipLevel, 'input');
-    html += renderFilterSection('资产标记', FILTERS_CONFIG.labelsBool, vipLevel, 'bool');
+    html += renderFilterSection(t('应用/产品'), FILTERS_CONFIG.labels, vipLevel, 'input');
+    html += renderFilterSection(t('资产标记'), FILTERS_CONFIG.labelsBool, vipLevel, 'bool');
 
     // 协议类
-    html += renderFilterSection('协议筛选', FILTERS_CONFIG.protocol, vipLevel, 'mixed');
+    html += renderFilterSection(t('协议筛选'), FILTERS_CONFIG.protocol, vipLevel, 'mixed');
 
     // 网站类
-    html += renderFilterSection('网站筛选', FILTERS_CONFIG.website, vipLevel, 'input');
+    html += renderFilterSection(t('网站筛选'), FILTERS_CONFIG.website, vipLevel, 'input');
 
     // 地理位置
-    html += renderFilterSection('地理位置', FILTERS_CONFIG.location, vipLevel, 'input');
+    html += renderFilterSection(t('地理位置'), FILTERS_CONFIG.location, vipLevel, 'input');
 
     // 证书类
-    html += renderFilterSection('证书状态', FILTERS_CONFIG.certBool, vipLevel, 'bool');
-    html += renderFilterSection('证书查询', FILTERS_CONFIG.cert, vipLevel, 'input');
+    html += renderFilterSection(t('证书状态'), FILTERS_CONFIG.certBool, vipLevel, 'bool');
+    html += renderFilterSection(t('证书查询'), FILTERS_CONFIG.cert, vipLevel, 'input');
 
     // 时间类
-    html += renderFilterSection('时间筛选', FILTERS_CONFIG.time, vipLevel, 'input');
+    html += renderFilterSection(t('时间筛选'), FILTERS_CONFIG.time, vipLevel, 'input');
 
     // 独立IP类
-    html += renderFilterSection('独立IP筛选', FILTERS_CONFIG.ipFilter, vipLevel, 'input');
+    html += renderFilterSection(t('独立IP筛选'), FILTERS_CONFIG.ipFilter, vipLevel, 'input');
 
     container.innerHTML = html;
 }
@@ -1136,7 +1139,7 @@ function renderFilterSection(title, filters, vipLevel, type) {
         filters.forEach(filter => {
             const disabled = filter.level > vipLevel;
             const lockIcon = disabled ? ' <span class="lock-icon">🔒</span>' : '';
-            const desc = filter.desc ? ` <span style="font-size:10px;color:var(--text-secondary)">(${filter.desc})</span>` : '';
+            const desc = filter.desc ? ` <span style="font-size:10px;color:var(--text-secondary)">(${t(filter.desc)})</span>` : '';
 
             // 操作符选择器
             let operatorHtml = '';
@@ -1150,10 +1153,10 @@ function renderFilterSection(title, filters, vipLevel, type) {
 
             html += `
                 <div class="filter-input-group${filter.operators ? ' has-operator' : ''}">
-                    <label>${filter.label}${lockIcon}${desc}</label>
+                    <label>${t(filter.label)}${lockIcon}${desc}</label>
                     <div class="filter-input-wrapper">
                         ${operatorHtml}
-                        <input type="${filter.type}" placeholder="${filter.placeholder || ''}" data-key="${filter.key}"
+                        <input type="${filter.type}" placeholder="${t(filter.placeholder || '')}" data-key="${filter.key}"
                             ${disabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter'){event.preventDefault();submitFilterValue('${filter.key}')}" onblur="submitFilterValue('${filter.key}')">
                         <button type="button" class="filter-add-btn" onclick="submitFilterValue('${filter.key}')" ${disabled ? 'disabled' : ''}>+</button>
                     </div>
@@ -1167,12 +1170,12 @@ function renderFilterSection(title, filters, vipLevel, type) {
         filters.forEach(filter => {
             const disabled = filter.level > vipLevel;
             const disabledClass = disabled ? 'disabled' : '';
-            const desc = filter.desc ? `(${filter.desc})` : '';
+            const desc = filter.desc ? `(${t(filter.desc)})` : '';
 
             const trueKey = `${filter.key}_true`;
             const falseKey = `${filter.key}_false`;
-            html += `<div class="filter-tag ${disabledClass}" data-key="${trueKey}" data-filter="${filter.key}" data-value="true" onclick="toggleFilter(this, '${trueKey}')">${filter.trueLabel}${disabled ? ' 🔒' : ''}</div>`;
-            html += `<div class="filter-tag ${disabledClass}" data-key="${falseKey}" data-filter="${filter.key}" data-value="false" onclick="toggleFilter(this, '${falseKey}')">${filter.falseLabel}${disabled ? ' 🔒' : ''}</div>`;
+            html += `<div class="filter-tag ${disabledClass}" data-key="${trueKey}" data-filter="${filter.key}" data-value="true" onclick="toggleFilter(this, '${trueKey}')">${t(filter.trueLabel)}${disabled ? ' 🔒' : ''}</div>`;
+            html += `<div class="filter-tag ${disabledClass}" data-key="${falseKey}" data-filter="${filter.key}" data-value="false" onclick="toggleFilter(this, '${falseKey}')">${t(filter.falseLabel)}${disabled ? ' 🔒' : ''}</div>`;
         });
         html += '</div>';
     } else if (type === 'mixed') {
@@ -1183,7 +1186,7 @@ function renderFilterSection(title, filters, vipLevel, type) {
                 const disabledClass = disabled ? 'disabled' : '';
                 filter.options.forEach((opt, idx) => {
                     const key = `${filter.key}_${opt}`;
-                    html += `<div class="filter-tag ${disabledClass}" data-key="${key}" data-filter="${filter.key}" data-value="${opt}" onclick="toggleFilter(this, '${key}')">${filter.optionLabels[idx]}${disabled ? ' 🔒' : ''}</div>`;
+                    html += `<div class="filter-tag ${disabledClass}" data-key="${key}" data-filter="${filter.key}" data-value="${opt}" onclick="toggleFilter(this, '${key}')">${t(filter.optionLabels[idx])}${disabled ? ' 🔒' : ''}</div>`;
                 });
             }
         });
@@ -1206,10 +1209,10 @@ function renderFilterSection(title, filters, vipLevel, type) {
 
                 html += `
                     <div class="filter-input-group${filter.operators ? ' has-operator' : ''}">
-                        <label>${filter.label}${lockIcon}</label>
+                        <label>${t(filter.label)}${lockIcon}</label>
                         <div class="filter-input-wrapper">
                             ${operatorHtml}
-                            <input type="${filter.type}" placeholder="${filter.placeholder || ''}" data-key="${filter.key}"
+                            <input type="${filter.type}" placeholder="${t(filter.placeholder || '')}" data-key="${filter.key}"
                                 ${disabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter'){event.preventDefault();submitFilterValue('${filter.key}')}" onblur="submitFilterValue('${filter.key}')">
                             <button type="button" class="filter-add-btn" onclick="submitFilterValue('${filter.key}')" ${disabled ? 'disabled' : ''}>+</button>
                         </div>
@@ -1335,7 +1338,7 @@ export function submitFilterValue(field) {
     });
 
     if (dupCount > 0) {
-        showToast(`已存在相同条件，跳过 ${dupCount} 项`, 'info');
+        showToast(t('已存在相同条件，跳过 {{count}} 项', { count: dupCount }), 'info');
     }
 
     input.value = '';
@@ -1397,7 +1400,7 @@ function resetFilterUI() {
 export function clearAllFilters() {
     resetFilterUI();
     updateActiveFiltersDisplay();
-    showToast('已清除所有筛选条件', 'info');
+    showToast(t('已清除所有筛选条件'), 'info');
 }
 
 // 从历史数据恢复筛选条件
@@ -1473,26 +1476,28 @@ function updateActiveFiltersDisplay() {
 
         if (config.options) {
             const idx = config.options.indexOf(data.value);
-            const lbl = `${config.label}: ${config.optionLabels[idx] != null ? config.optionLabels[idx] : data.value}`;
+            const optLabel = config.optionLabels[idx] != null ? t(config.optionLabels[idx]) : data.value;
+            const lbl = `${t(config.label)}: ${optLabel}`;
             previewParts.push(`<span class="active-filter-tag">${escapeHtml(lbl)}<span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span></span>`);
         } else if (config.trueLabel) {
-            const lbl = `${config.label}: ${data.value === 'true' ? config.trueLabel : config.falseLabel}`;
+            const valueLabel = data.value === 'true' ? t(config.trueLabel) : t(config.falseLabel);
+            const lbl = `${t(config.label)}: ${valueLabel}`;
             previewParts.push(`<span class="active-filter-tag">${escapeHtml(lbl)}<span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span></span>`);
         } else if (Array.isArray(data.conditions)) {
             // 输入框类型：每个 condition 一条
             data.conditions.forEach(c => {
                 const opLabel = c.operator || '=';
-                previewParts.push(`<span class="active-filter-tag">${escapeHtml(config.label)} ${escapeHtml(opLabel)} ${escapeHtml(c.value)}<span class="remove-filter" data-key="${escapeHtml(key)}" data-cid="${escapeHtml(c.cid || '')}">&times;</span></span>`);
+                previewParts.push(`<span class="active-filter-tag">${escapeHtml(t(config.label))} ${escapeHtml(opLabel)} ${escapeHtml(c.value)}<span class="remove-filter" data-key="${escapeHtml(key)}" data-cid="${escapeHtml(c.cid || '')}">&times;</span></span>`);
             });
         } else {
             // 兼容旧格式残留
             const op = data.operator || '=';
-            const lbl = `${config.label} ${op} ${data.value}`;
+            const lbl = `${t(config.label)} ${op} ${data.value}`;
             previewParts.push(`<span class="active-filter-tag">${escapeHtml(lbl)}<span class="remove-filter" data-key="${escapeHtml(key)}">&times;</span></span>`);
         }
     });
 
-    previewParts.push(`<span class="active-filter-tag active-filter-clear" data-action="clear-all">清除全部</span>`);
+    previewParts.push(`<span class="active-filter-tag active-filter-clear" data-action="clear-all">${t('清除全部')}</span>`);
     container.innerHTML = previewParts.join('');
 
     // 事件委托：移除单个筛选（区分整字段 vs 单 condition）

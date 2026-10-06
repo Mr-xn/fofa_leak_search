@@ -1,6 +1,8 @@
 // js/tauri-bridge.js - Tauri 桌面环境适配桥接层
 // 检测是否运行在 Tauri 桌面环境中，并获取 Rust API 代理的端口
 
+import { t } from './i18n/index.js';
+
 /**
  * 检测当前是否运行在 Tauri 桌面环境中
  * Tauri 会在 window 对象上注入 __TAURI_INTERNALS__
@@ -26,7 +28,7 @@ async function getProxyPort() {
  * @returns {Promise<string>} 设置结果消息
  */
 export async function setProxyConfig(host, port, username, password) {
-    if (!isTauri()) return '非 Tauri 环境，代理设置未生效';
+    if (!isTauri()) return t('非 Tauri 环境，代理设置未生效');
     return await window.__TAURI_INTERNALS__.invoke('set_proxy_config_cmd', {
         host: host || '',
         port: port || 0,
@@ -51,7 +53,7 @@ export async function getProxyConfig() {
  * @returns {Promise<string>} 设置结果消息
  */
 export async function setRequestConfig(userAgent, customHeaders) {
-    if (!isTauri()) return '非 Tauri 环境，请求配置未生效';
+    if (!isTauri()) return t('非 Tauri 环境，请求配置未生效');
     return await window.__TAURI_INTERNALS__.invoke('set_request_config_cmd', {
         userAgent: userAgent || '',
         customHeaders: customHeaders || {}
@@ -107,7 +109,7 @@ export async function initTauriBridge() {
     // 验证代理健康状态
     const healthResp = await fetch(`${baseUrl}/health`);
     if (!healthResp.ok) {
-        throw new Error('API 代理健康检查失败');
+        throw new Error(t('API 代理健康检查失败'));
     }
 
     return baseUrl;

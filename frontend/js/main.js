@@ -1,6 +1,7 @@
 // js/main.js - 主入口（初始化、事件绑定）
 
 import { state, STORAGE_KEYS, APP_VERSION } from './config.js';
+import { initI18n, t } from './i18n/index.js';
 import { showToast, debounce, escapeHtml, saveTextFile, buildCsvText } from './utils.js';
 import { initTauriBridge, isTauri, openUrl, pickExportDir } from './tauri-bridge.js';
 import { initIndexedDB, clearExpiredCache, deleteHistoryItem, clearAllCache as clearAllCacheStorage, getCachedUserInfo, setCachedUserInfo, getUsageStats, getHistoryFilters } from './storage.js';
@@ -52,7 +53,7 @@ window.showCacheManager = showCacheManager;
 window.closeCacheModal = closeCacheModal;
 window.clearAllCache = async () => {
     await clearAllCacheStorage();
-    showToast('缓存已清除', 'success');
+    showToast(t('缓存已清除'), 'success');
 };
 window.doSearch = doSearch;
 window.showUserInfo = showUserInfo;
@@ -96,7 +97,7 @@ window.selectSuggestion = (query) => {
     const historyFilters = getHistoryFilters(query);
     if (historyFilters && Object.keys(historyFilters).length > 0) {
         restoreFiltersFromData(historyFilters);
-        showToast('已从历史记录恢复筛选条件', 'info');
+        showToast(t('已从历史记录恢复筛选条件'), 'info');
     }
 
     doSearch();
@@ -139,7 +140,7 @@ let smartMergedResults = null;
 
 window.openSmartDownload = () => {
     if (!state.currentQuery) {
-        showToast('请先执行搜索', 'error');
+        showToast(t('请先执行搜索'), 'error');
         return;
     }
     if (!state.apiKey) {
@@ -154,7 +155,7 @@ window.openSmartDownload = () => {
     modal.classList.add('show');
 
     // 重置 UI
-    document.getElementById('smartAnalyzeInfo').innerHTML = '点击「开始分析」统计当前查询的数据分布';
+    document.getElementById('smartAnalyzeInfo').innerHTML = t('点击「开始分析」统计当前查询的数据分布');
     document.getElementById('smartModalEl').classList.remove('expanded');
     document.getElementById('smartPhasePlan').style.display = 'none';
     document.getElementById('smartPlanGrid').innerHTML = '';
@@ -181,7 +182,7 @@ window.closeSmartDownload = () => {
 window.startSmartDownload = async () => {
     const startBtn = document.getElementById('smartStartBtn');
     startBtn.disabled = true;
-    startBtn.textContent = '分析中...';
+    startBtn.textContent = t('分析中...');
 
     // 会话级重置：避免上次会话累积的 429 历史让本次新查询付出过长延迟
     resetRateLimitState();
@@ -198,25 +199,27 @@ window.startSmartDownload = async () => {
 
     if (remaining === 0) {
         setPhaseIcon('smartPhaseAnalyzeIcon', 'error', '✗');
+        const usedStr = monthlyUsed.toLocaleString();
+        const quotaDisplay = monthlyQuota === Infinity ? t('无限制') : monthlyQuota.toLocaleString();
         document.getElementById('smartAnalyzeInfo').innerHTML =
-            `<span style="color:var(--error)">⚠ 当月数据配额已用尽 (${monthlyUsed.toLocaleString()}/${monthlyQuota === Infinity ? '无限制' : monthlyQuota.toLocaleString()})</span><br>` +
-            `当前等级: <strong>${VIP_LEVEL_MAP[vipLevel] || '注册用户'}</strong><br>` +
-            `请下月再试或升级账户以获取更多配额`;
+            `<span style="color:var(--error)">${t('⚠ 当月数据配额已用尽 ({{used}}/{{quota}})', { used: usedStr, quota: quotaDisplay })}</span><br>` +
+            `${t('当前等级: ')}<strong>${t(VIP_LEVEL_MAP[vipLevel] || '注册用户')}</strong><br>` +
+            t('请下月再试或升级账户以获取更多配额');
         startBtn.disabled = false;
-        startBtn.textContent = '重新分析';
+        startBtn.textContent = t('重新分析');
         return;
     }
 
     // Phase 1: 分析
     setPhaseIcon('smartPhaseAnalyzeIcon', 'running', '⟳');
-    document.getElementById('smartAnalyzeInfo').innerHTML = '正在查询数据分布...';
+    document.getElementById('smartAnalyzeInfo').innerHTML = t('正在查询数据分布...');
 
     const stats = await analyzeDimensions(state.currentQuery);
     if (!stats) {
         setPhaseIcon('smartPhaseAnalyzeIcon', 'error', '✗');
-        document.getElementById('smartAnalyzeInfo').innerHTML = '<span style="color:var(--error)">分析失败，请检查 API Key 和网络</span>';
+        document.getElementById('smartAnalyzeInfo').innerHTML = `<span style="color:var(--error)">${t('分析失败，请检查 API Key 和网络')}</span>`;
         startBtn.disabled = false;
-        startBtn.textContent = '重新分析';
+        startBtn.textContent = t('重新分析');
         return;
     }
 
@@ -225,42 +228,53 @@ window.startSmartDownload = async () => {
 
     if (maxTotalLimit === 0) {
         setPhaseIcon('smartPhaseAnalyzeIcon', 'error', '✗');
+        const sizeStr = stats.size.toLocaleString();
         document.getElementById('smartAnalyzeInfo').innerHTML =
-            `<span style="color:var(--error)">⚠ 配额不足，无法下载</span><br>` +
-            `查询匹配: ${stats.size.toLocaleString()} 条 · ${limitReason}`;
+            `<span style="color:var(--error)">${t('⚠ 配额不足，无法下载')}</span><br>` +
+            t('查询匹配: {{n}} 条 · {{reason}}', { n: sizeStr, reason: limitReason });
         startBtn.disabled = false;
-        startBtn.textContent = '重新分析';
+        startBtn.textContent = t('重新分析');
         return;
     }
 
     setPhaseIcon('smartPhaseAnalyzeIcon', 'done', '✓');
 
     // 显示分析结果 + 配额信息
+    const sizeStr = stats.size.toLocaleString();
+    const freeLimitStr = freeLimit.toLocaleString();
+    const monthlyUsedStr = monthlyUsed.toLocaleString();
+    const maxTotalLimitStr = maxTotalLimit.toLocaleString();
+    const splitCount = Math.ceil(maxTotalLimit / freeLimit);
     let analyzeHtml = `<div class="query-line">${escapeHtml(state.currentQuery)}</div>`;
     analyzeHtml += `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">`;
-    analyzeHtml += `<span><strong>数据范围：</strong>${state.searchFull ? '全部数据' : '近一年'}</span>`;
-    analyzeHtml += `<span><strong>数据量：</strong>${stats.size.toLocaleString()} 条</span>`;
-    analyzeHtml += `<span><strong>单次限制：</strong>${freeLimit.toLocaleString()} 条</span>`;
-    analyzeHtml += `<span><strong>需要拆分：</strong>${maxTotalLimit > freeLimit ? '至少 ' + Math.ceil(maxTotalLimit / freeLimit) + ' 步' : '否'}</span>`;
+    analyzeHtml += `<span><strong>${t('数据范围：')}</strong>${state.searchFull ? t('全部数据') : t('近一年')}</span>`;
+    analyzeHtml += `<span><strong>${t('数据量：')}</strong>${t('{{n}} 条', { n: sizeStr })}</span>`;
+    analyzeHtml += `<span><strong>${t('单次限制：')}</strong>${t('{{n}} 条', { n: freeLimitStr })}</span>`;
+    analyzeHtml += `<span><strong>${t('需要拆分：')}</strong>${maxTotalLimit > freeLimit ? t('至少 {{n}} 步', { n: splitCount }) : t('否')}</span>`;
     analyzeHtml += `</div>`;
 
     // 配额信息
     analyzeHtml += `<div style="margin: 10px 0 0; padding: 8px 12px; background: var(--primary-light); border-radius: 6px; font-size: 12px; line-height: 1.7;">`;
-    analyzeHtml += `<strong>配额：</strong>${VIP_LEVEL_MAP[vipLevel] || '注册用户'} · `;
-    analyzeHtml += `已用 ${monthlyUsed.toLocaleString()} 条 · `;
+    analyzeHtml += `<strong>${t('配额：')}</strong>${t(VIP_LEVEL_MAP[vipLevel] || '注册用户')} · `;
+    analyzeHtml += t('已用 {{n}} 条 · ', { n: monthlyUsedStr });
     if (monthlyQuota === Infinity) {
-        analyzeHtml += `无限制`;
+        analyzeHtml += t('无限制');
     } else {
-        analyzeHtml += `配额 ${monthlyQuota.toLocaleString()} · 剩余 ${remaining.toLocaleString()}`;
+        const monthlyQuotaStr = monthlyQuota.toLocaleString();
+        const remainingStr = remaining.toLocaleString();
+        analyzeHtml += t('配额 {{quota}} · 剩余 {{remaining}}', { quota: monthlyQuotaStr, remaining: remainingStr });
     }
     analyzeHtml += `<br>`;
-    analyzeHtml += `<strong>本次可用：</strong>${maxTotalLimit.toLocaleString()} 条 — ${limitReason}`;
+    analyzeHtml += `<strong>${t('本次可用：')}</strong>${t('{{n}} 条 — {{reason}}', { n: maxTotalLimitStr, reason: limitReason })}`;
     analyzeHtml += `</div>`;
 
     if (stats.distinct) {
         const parts = [];
         if (stats.distinct.ip) parts.push(`IP: ${stats.distinct.ip.toLocaleString()}`);
-        if (stats.distinct.domain) parts.push(`域名: ${stats.distinct.domain.toLocaleString()}`);
+        if (stats.distinct.domain) {
+            const domainStr = stats.distinct.domain.toLocaleString();
+            parts.push(t('域名: {{n}}', { n: domainStr }));
+        }
         if (stats.distinct.server) parts.push(`Server: ${stats.distinct.server.toLocaleString()}`);
         if (parts.length > 0) {
             analyzeHtml += `<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">${parts.join(' · ')}</div>`;
@@ -269,7 +283,7 @@ window.startSmartDownload = async () => {
 
     // 显示各维度 top 5
     if (stats.aggs) {
-        const fieldLabels = { asn: 'ASN', country: '国家', port: '端口', server: 'HTTP Server', org: '组织' };
+        const fieldLabels = { asn: 'ASN', country: t('国家'), port: t('端口'), server: 'HTTP Server', org: t('组织') };
         for (const [field, items] of Object.entries(stats.aggs)) {
             if (!items || items.length === 0) continue;
             analyzeHtml += `<div style="margin-top:8px;"><strong style="font-size:12px;">${fieldLabels[field] || field} Top 5</strong></div>`;
@@ -292,7 +306,7 @@ window.startSmartDownload = async () => {
     const planResult = await planQueriesAsync(state.currentQuery, stats, freeLimit, maxTotalLimit, (info) => {
         if (info.query) {
             document.getElementById('smartPlanBadge').textContent =
-                `正在探测 ${info.probed + 1}/${info.total}...`;
+                t('正在探测 {{current}}/{{total}}...', { current: info.probed + 1, total: info.total });
         }
     });
     smartPlanSteps = planResult.steps;
@@ -303,17 +317,22 @@ window.startSmartDownload = async () => {
         const planCount = smartPlanSteps.length;
         const planProbeFailed = smartPlanSteps.filter(s => s.probeFailed).length;
         const estimatedCount = smartPlanSteps.filter(s => s.estimated).length;
-        const probeHint = planResult.probeCount > 0 ? ` · 探测 ${planResult.probeCount} 次` : '';
+        const probeHint = planResult.probeCount > 0 ? t(' · 探测 {{n}} 次', { n: planResult.probeCount }) : '';
         // 覆盖率基于 planResult.coveredSize（已排除 probeFailed 步骤）
         const confirmedCover = planResult.coveredSize || 0;
+        const confirmedCoverStr = confirmedCover.toLocaleString();
+        const targetSizeStr = planResult.targetSize.toLocaleString();
         const coveragePct = planResult.targetSize > 0
             ? Math.min(100, Math.round(confirmedCover / planResult.targetSize * 100))
             : 100;
-        const planFailedHint = planProbeFailed > 0 ? ` · ⚠ ${planProbeFailed} 步探测失败` : '';
+        const planFailedHint = planProbeFailed > 0 ? t(' · ⚠ {{n}} 步探测失败', { n: planProbeFailed }) : '';
         // 笛卡尔积估算步骤提示（让用户知道这部分覆盖量是估算的）
-        const estimatedHint = estimatedCount > 0 ? ` · ${estimatedCount} 步估算` : '';
+        const estimatedHint = estimatedCount > 0 ? t(' · {{n}} 步估算', { n: estimatedCount }) : '';
         document.getElementById('smartPlanBadge').textContent =
-            `${planCount} 步 · ${confirmedCover.toLocaleString()}/${planResult.targetSize.toLocaleString()} 条${probeHint}${estimatedHint} · 覆盖 ${coveragePct}%${planFailedHint}`;
+            t('{{count}} 步 · {{cover}}/{{target}} 条{{probeHint}}{{estimatedHint}} · 覆盖 {{pct}}%{{planFailedHint}}', {
+                count: planCount, cover: confirmedCoverStr, target: targetSizeStr,
+                probeHint, estimatedHint, pct: coveragePct, planFailedHint
+            });
     }
 
     setPhaseIcon('smartPhasePlanIcon', 'done', '✓');
@@ -322,19 +341,24 @@ window.startSmartDownload = async () => {
     setPhaseIcon('smartPhasePrefetchIcon', 'running', '⟳');
     document.getElementById('smartPhasePrefetch').style.display = '';
     document.getElementById('smartPrefetchInfo').style.display = '';
-    document.getElementById('smartPrefetchInfo').innerHTML = '正在预查每步真实总数...';
+    document.getElementById('smartPrefetchInfo').innerHTML = t('正在预查每步真实总数...');
 
     // 获取 maxsize（FOFA 单次查询上限）
     const maxsize = getMaxSizeForSmart();
-    document.getElementById('smartPrefetchBadge').textContent = `延迟 ${(rateLimitState.currentDelayMs / 1000).toFixed(1)}s`;
+    const delaySec = (rateLimitState.currentDelayMs / 1000).toFixed(1);
+    document.getElementById('smartPrefetchBadge').textContent = t('延迟 {{delay}}s', { delay: delaySec });
 
     smartPlanSteps = await prefetchStepSizes(
         smartPlanSteps,
         maxsize,
         stats,
         (info) => {
+            const failedHint = info.failed ? t(' · 失败 {{n}}', { n: info.failed }) : '';
             document.getElementById('smartPrefetchBadge').textContent =
-                `预查 ${info.checked}/${info.total} · 偏差 ${info.deviations} · 拆分 ${info.splits}${info.failed ? ` · 失败 ${info.failed}` : ''}`;
+                t('预查 {{checked}}/{{total}} · 偏差 {{deviations}} · 拆分 {{splits}}{{failedHint}}', {
+                    checked: info.checked, total: info.total,
+                    deviations: info.deviations, splits: info.splits, failedHint
+                });
         }
     );
     renderPlanSteps();
@@ -344,40 +368,45 @@ window.startSmartDownload = async () => {
     // 更新徽标（预查后基于真实值）
     const finalCount = smartPlanSteps.length;
     const finalTotal = smartPlanSteps.reduce((s, st) => s + st.estimatedSize, 0);
+    const finalTotalStr = finalTotal.toLocaleString();
     const probeFailedCount = smartPlanSteps.filter(s => s.probeFailed || s.prefetchFailed).length;
     const overLimitCount = smartPlanSteps.filter(s => s.overLimit).length;
     const deviationCount = smartPlanSteps.filter(s => s.deviation).length;
-    const prefetchHint = ` · 预查 ${smartPlanSteps.filter(s => s.realSize).length}/${finalCount}`;
-    const deviationHint = deviationCount > 0 ? ` · ⚠ ${deviationCount} 步估算偏低` : '';
-    const overLimitHint = overLimitCount > 0 ? ` · ⚠ ${overLimitCount} 步超限` : '';
-    const failedHint = probeFailedCount > 0 ? ` · ⚠ ${probeFailedCount} 步失败` : '';
+    const prefetchedCount = smartPlanSteps.filter(s => s.realSize).length;
+    const prefetchHint = t(' · 预查 {{checked}}/{{total}}', { checked: prefetchedCount, total: finalCount });
+    const deviationHint = deviationCount > 0 ? t(' · ⚠ {{n}} 步估算偏低', { n: deviationCount }) : '';
+    const overLimitHint = overLimitCount > 0 ? t(' · ⚠ {{n}} 步超限', { n: overLimitCount }) : '';
+    const failedHint = probeFailedCount > 0 ? t(' · ⚠ {{n}} 步失败', { n: probeFailedCount }) : '';
     document.getElementById('smartPlanBadge').textContent =
-        `${finalCount} 步 · ${finalTotal.toLocaleString()} 条${prefetchHint}${deviationHint}${overLimitHint}${failedHint}`;
+        t('{{count}} 步 · {{total}} 条{{prefetchHint}}{{deviationHint}}{{overLimitHint}}{{failedHint}}', {
+            count: finalCount, total: finalTotalStr,
+            prefetchHint, deviationHint, overLimitHint, failedHint
+        });
 
     // 超限或预查失败时禁用执行按钮
     const execBtn = document.getElementById('smartExecuteBtn');
     if (overLimitCount > 0 || probeFailedCount > 0) {
         execBtn.disabled = true;
-        execBtn.textContent = '存在超限/失败步骤';
-        execBtn.title = `${overLimitCount + probeFailedCount} 个步骤有问题，执行会触发 FOFA 限制或扣 F 点。请查看诊断日志`;
+        execBtn.textContent = t('存在超限/失败步骤');
+        execBtn.title = t('{{n}} 个步骤有问题，执行会触发 FOFA 限制或扣 F 点。请查看诊断日志', { n: overLimitCount + probeFailedCount });
     } else {
         execBtn.disabled = false;
-        execBtn.textContent = '执行下载';
+        execBtn.textContent = t('执行下载');
         execBtn.title = deviationCount > 0
-            ? `${deviationCount} 个步骤估算偏低，已用预查真实值替代`
+            ? t('{{n}} 个步骤估算偏低，已用预查真实值替代', { n: deviationCount })
             : '';
     }
 
     document.getElementById('smartExecuteBtn').style.display = '';
 
     startBtn.disabled = false;
-    startBtn.textContent = '重新分析';
+    startBtn.textContent = t('重新分析');
 };
 
 window.executeSmartDownload = async () => {
     const execBtn = document.getElementById('smartExecuteBtn');
     execBtn.disabled = true;
-    execBtn.textContent = '下载中...';
+    execBtn.textContent = t('下载中...');
     document.getElementById('smartStartBtn').disabled = true;
 
     // Phase 4: 执行
@@ -395,7 +424,7 @@ window.executeSmartDownload = async () => {
         const total = steps.length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         document.getElementById('smartProgressBar').style.width = `${pct}%`;
-        document.getElementById('smartExecuteInfo').innerHTML = `已完成 ${done}/${total} 步 (${pct}%)`;
+        document.getElementById('smartExecuteInfo').innerHTML = t('已完成 {{done}}/{{total}} 步 ({{pct}}%)', { done, total, pct });
     });
 
     smartMergedResults = result.mergedResults;
@@ -412,16 +441,18 @@ window.executeSmartDownload = async () => {
     document.getElementById('smartDuplicateCount').textContent = result.stats.duplicateCount.toLocaleString();
     document.getElementById('smartStepsInfo').textContent = `${result.stats.stepsCompleted}/${result.stats.stepsTotal}`;
 
+    const uniqueCountStr = result.stats.uniqueCount.toLocaleString();
+    const duplicateCountStr = result.stats.duplicateCount.toLocaleString();
     document.getElementById('smartExecuteInfo').innerHTML =
-        `下载完成，耗时 ${elapsed}s。去重后 <strong>${result.stats.uniqueCount.toLocaleString()}</strong> 条唯一数据。` +
-        (result.stats.duplicateCount > 0 ? ` (${result.stats.duplicateCount.toLocaleString()} 条重复已去除)` : '') +
-        (hasErrors ? ' <span style="color:var(--error)">⚠ 部分步骤失败</span>' : '');
+        t('下载完成，耗时 {{elapsed}}s。去重后 ', { elapsed }) + `<strong>${uniqueCountStr}</strong>` + t(' 条唯一数据。') +
+        (result.stats.duplicateCount > 0 ? t(' ({{n}} 条重复已去除)', { n: duplicateCountStr }) : '') +
+        (hasErrors ? ` <span style="color:var(--error)">${t('⚠ 部分步骤失败')}</span>` : '');
 
     execBtn.style.display = 'none';
     document.getElementById('smartExportBtn').style.display = '';
     document.getElementById('smartStartBtn').disabled = false;
 
-    showToast(`智能下载完成: ${result.stats.uniqueCount.toLocaleString()} 条数据`, 'success');
+    showToast(t('智能下载完成: {{n}} 条数据', { n: uniqueCountStr }), 'success');
 
     // 执行完成自动保存 CSV（无需手动点「导出 CSV」；按钮保留可重新导出）
     if (result.mergedResults && result.mergedResults.length > 0) {
@@ -437,7 +468,7 @@ window.exportSmartResults = async (auto = false) => {
             hasResults: !!smartMergedResults,
             length: smartMergedResults ? smartMergedResults.length : 0
         });
-        if (!auto) showToast('没有可导出的数据', 'error');
+        if (!auto) showToast(t('没有可导出的数据'), 'error');
         return;
     }
 
@@ -454,22 +485,22 @@ window.exportSmartResults = async (auto = false) => {
         });
         // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
         const { path, dirFallback, fallbackReason } = await saveTextFile(filename, csvContent, 'text/csv;charset=utf-8');
-        const doneLabel = auto ? '已自动保存' : '已导出';
+        const doneLabel = auto ? t('已自动保存') : t('已导出');
         if (fallbackReason) {
             logWarn('download', '原生保存失败，已降级浏览器下载', { filename, reason: fallbackReason });
-            showToast(`${doneLabel} ${smartMergedResults.length} 条数据（原生保存失败已降级浏览器下载: ${fallbackReason}）`, 'warning');
+            showToast(t('{{label}} {{n}} 条数据（原生保存失败已降级浏览器下载: {{reason}}）', { label: doneLabel, n: smartMergedResults.length, reason: fallbackReason }), 'warning');
             return;
         }
         logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)', dirFallback: !!dirFallback });
         if (dirFallback) {
             logWarn('download', '保存位置不可用，已回退系统下载目录', { filename, savedPath: path });
-            showToast(`保存位置不可用，已保存到系统「下载」目录: ${path}`, 'warning');
+            showToast(t('保存位置不可用，已保存到系统「下载」目录: {{path}}', { path }), 'warning');
         } else {
-            showToast(`${doneLabel} ${smartMergedResults.length} 条数据${path ? ' → ' + path : ''}`, 'success');
+            showToast(t('{{label}} {{n}} 条数据', { label: doneLabel, n: smartMergedResults.length }) + (path ? ' → ' + path : ''), 'success');
         }
     } catch (e) {
         logError('download', '导出失败', { auto, error: e.message || String(e) });
-        showToast(`导出失败: ${e.message || e}`, 'error');
+        showToast(t('导出失败: {{msg}}', { msg: e.message || e }), 'error');
     }
 };
 
@@ -481,11 +512,11 @@ window.chooseExportDir = async () => {
         const input = document.getElementById('exportSaveDir');
         if (input) input.value = dir;
         localStorage.setItem(STORAGE_KEYS.exportSaveDir, dir);
-        showToast(`保存位置已设置: ${dir}`, 'success');
+        showToast(t('保存位置已设置: {{dir}}', { dir }), 'success');
         logInfo('settings', `导出保存位置: ${dir}`);
     } catch (e) {
         logError('settings', '选择目录失败', { error: e.message || String(e) });
-        showToast(`选择目录失败: ${e.message || e}`, 'error');
+        showToast(t('选择目录失败: {{msg}}', { msg: e.message || e }), 'error');
     }
 };
 
@@ -517,25 +548,26 @@ function renderPlanSteps() {
         const statusClass = `step-${visualStatus}`;
         const iconMap = { pending: '○', running: '⟳', done: '✓', error: '⚠', skipped: '⊘' };
         const iconClass = `phase-${visualStatus}`;
-        const retryInfo = step.retryCount > 1 ? ` <span style="color:var(--warning);font-size:10px;">重试${step.retryCount}/${MAX_RETRIES}</span>` : '';
+        const estSizeStr = step.estimatedSize.toLocaleString();
+        const retryInfo = step.retryCount > 1 ? ` <span style="color:var(--warning);font-size:10px;">${t('重试{{count}}/{{max}}', { count: step.retryCount, max: MAX_RETRIES })}</span>` : '';
         const errorInfo = (step.status === 'error' || step.status === 'skipped') && step.errorMsg ? `<div class="step-error-msg">${escapeHtml(step.errorMsg)}</div>` : '';
-        const resultInfo = step.status === 'done' && step.results ? ` <span style="color:var(--success);font-size:10px;">(${step.results.length}条)</span>` : '';
+        const resultInfo = step.status === 'done' && step.results ? ` <span style="color:var(--success);font-size:10px;">${t('({{n}}条)', { n: step.results.length })}</span>` : '';
         // 估算步骤（笛卡尔积降级产物）显示灰色标记，让用户知道这是估算值
-        const estimatedTag = step.estimated ? ` <span style="color:var(--text-muted);font-size:10px;">[估算]</span>` : '';
+        const estimatedTag = step.estimated ? ` <span style="color:var(--text-muted);font-size:10px;">${t('[估算]')}</span>` : '';
         const realSizeTag = step.realSize && step.realSize !== step.estimatedSize
-            ? ` <span style="color:var(--info);font-size:10px;">(真实 ${step.realSize.toLocaleString()})</span>`
+            ? ` <span style="color:var(--info);font-size:10px;">${t('(真实 {{n}})', { n: step.realSize.toLocaleString() })}</span>`
             : '';
         const deviationTag = step.deviation
-            ? ` <span style="color:var(--warning);font-size:10px;">⚠ 估算偏低 ×${step.deviation.toFixed(1)}</span>`
+            ? ` <span style="color:var(--warning);font-size:10px;">${t('⚠ 估算偏低 ×{{n}}', { n: step.deviation.toFixed(1) })}</span>`
             : '';
         const overLimitTag = step.overLimit
-            ? ` <span style="color:var(--error);font-size:10px;">⚠ 超限</span>`
+            ? ` <span style="color:var(--error);font-size:10px;">${t('⚠ 超限')}</span>`
             : '';
         const prefetchFailedTag = step.prefetchFailed
-            ? ` <span style="color:var(--error);font-size:10px;">⚠ 预查失败</span>`
+            ? ` <span style="color:var(--error);font-size:10px;">${t('⚠ 预查失败')}</span>`
             : '';
         const overLimitHint = step.estimatedSize > (window.__smartFreeLimit || 10000) && step.probeFailed
-            ? ` <span style="color:var(--error);font-size:10px;">(超限 ${step.estimatedSize.toLocaleString()} 条)</span>` : '';
+            ? ` <span style="color:var(--error);font-size:10px;">${t('(超限 {{n}} 条)', { n: estSizeStr })}</span>` : '';
         return `
             <div class="smart-plan-item ${statusClass}">
                 <span class="step-status-icon ${iconClass}">${iconMap[visualStatus]}</span>
@@ -544,7 +576,7 @@ function renderPlanSteps() {
                     <div class="step-query" title="${escapeHtml(step.query)}">${escapeHtml(step.query)}</div>
                     ${errorInfo}
                 </div>
-                <span class="step-count">${step.estimatedSize.toLocaleString()} 条</span>
+                <span class="step-count">${t('{{n}} 条', { n: estSizeStr })}</span>
             </div>
         `;
     }).join('');
@@ -561,7 +593,7 @@ window.showUsageStats = () => {
     const monthlyQuota = getMonthlyQuota();
     const dataCount = stats.dataCount || 0;
 
-    document.getElementById('usageMonth').textContent = `${monthStr} 使用情况`;
+    document.getElementById('usageMonth').textContent = t('{{month}} 使用情况', { month: monthStr });
     document.getElementById('usageApiCalls').textContent = stats.apiCalls.toLocaleString();
     document.getElementById('usageDownloads').textContent = stats.downloads.toLocaleString();
     document.getElementById('usageFPoints').textContent = stats.fPoints.toLocaleString();
@@ -570,14 +602,17 @@ window.showUsageStats = () => {
     // 配额进度条
     const quotaBar = document.getElementById('usageQuotaBar');
     const quotaText = document.getElementById('usageQuotaText');
+    const levelName = t(VIP_LEVEL_MAP[vipLevel] || '注册用户');
     if (monthlyQuota === Infinity) {
         quotaBar.style.width = '0%';
-        quotaText.textContent = `${VIP_LEVEL_MAP[vipLevel] || '注册用户'} · 无限制`;
+        quotaText.textContent = t('{{level}} · 无限制', { level: levelName });
     } else {
         const pct = Math.min(100, Math.round((dataCount / monthlyQuota) * 100));
+        const dataCountStr = dataCount.toLocaleString();
+        const monthlyQuotaStr = monthlyQuota.toLocaleString();
         quotaBar.style.width = `${pct}%`;
         quotaBar.style.background = pct > 80 ? 'var(--error)' : pct > 60 ? 'var(--warning)' : 'linear-gradient(90deg, var(--primary), #6366f1)';
-        quotaText.textContent = `${dataCount.toLocaleString()} / ${monthlyQuota.toLocaleString()} 条 (${pct}%) · ${VIP_LEVEL_MAP[vipLevel] || '注册用户'}`;
+        quotaText.textContent = t('{{count}} / {{total}} 条 ({{pct}}%) · {{level}}', { count: dataCountStr, total: monthlyQuotaStr, pct, level: levelName });
     }
 
     document.getElementById('usageModal').classList.add('show');
@@ -609,7 +644,7 @@ window.clearSearchInput = () => {
 window.copyCurrentQuery = () => {
     const query = state.currentQuery;
     if (!query) {
-        showToast('没有可复制的查询语句', 'error');
+        showToast(t('没有可复制的查询语句'), 'error');
         return;
     }
 
@@ -618,7 +653,7 @@ window.copyCurrentQuery = () => {
     navigator.clipboard.writeText(query).then(() => {
         const btn = document.getElementById('copyQueryBtn');
         btn.classList.add('copied');
-        showToast('查询语句已复制', 'success');
+        showToast(t('查询语句已复制'), 'success');
         setTimeout(() => {
             btn.classList.remove('copied');
         }, 1500);
@@ -634,12 +669,12 @@ window.copyCurrentQuery = () => {
             document.execCommand('copy');
             const btn = document.getElementById('copyQueryBtn');
             btn.classList.add('copied');
-            showToast('查询语句已复制', 'success');
+            showToast(t('查询语句已复制'), 'success');
             setTimeout(() => {
                 btn.classList.remove('copied');
             }, 1500);
         } catch (e) {
-            showToast('复制失败', 'error');
+            showToast(t('复制失败'), 'error');
         }
         document.body.removeChild(textarea);
     });
@@ -661,8 +696,8 @@ function _startInlineNameEdit(idx, entry, editBtn) {
     nameRow.innerHTML = `
         <div class="fav-name-edit-row" data-name-edit-index="${idx}">
             <input type="text" class="fav-name-input" value="${escapeHtml(currentName)}" placeholder="${escapeHtml(entry.baseQuery)}">
-            <button class="fav-name-save" title="保存">✓</button>
-            <button class="fav-name-cancel" title="取消">✕</button>
+            <button class="fav-name-save" title="${t('保存')}">✓</button>
+            <button class="fav-name-cancel" title="${t('取消')}">✕</button>
         </div>`;
     const input = nameRow.querySelector('.fav-name-input');
     if (input) {
@@ -676,7 +711,7 @@ function _startInlineNameEdit(idx, entry, editBtn) {
                     updateFavoriteName(entry.query, newName);
                     const searchText = document.getElementById('favSearchInput')?.value || '';
                     renderFavoritesList(searchText);
-                    showToast('别名已更新', 'success');
+                    showToast(t('别名已更新'), 'success');
                 }
             } else if (e.key === 'Escape') {
                 const searchText = document.getElementById('favSearchInput')?.value || '';
@@ -706,13 +741,13 @@ async function _showTagPopover(anchor, entry, idx) {
     // === 标题 ===
     const title = document.createElement('div');
     title.className = 'fav-tag-popover-title';
-    title.textContent = '选择分组标签';
+    title.textContent = t('选择分组标签');
     popover.appendChild(title);
 
     // === 快速筛选 ===
     const filterRow = document.createElement('div');
     filterRow.className = 'fav-tag-filter-row';
-    filterRow.innerHTML = '<input type="text" class="fav-tag-filter-input" placeholder="筛选标签…">';
+    filterRow.innerHTML = `<input type="text" class="fav-tag-filter-input" placeholder="${t('筛选标签…')}">`;
     popover.appendChild(filterRow);
     const filterInput = filterRow.querySelector('.fav-tag-filter-input');
 
@@ -720,8 +755,8 @@ async function _showTagPopover(anchor, entry, idx) {
     const customRow = document.createElement('div');
     customRow.className = 'fav-tag-custom-row';
     customRow.innerHTML = `
-        <input type="text" class="fav-tag-custom-input" placeholder="新建分组…" maxlength="20">
-        <button class="fav-tag-custom-add" title="添加">+</button>`;
+        <input type="text" class="fav-tag-custom-input" placeholder="${t('新建分组…')}" maxlength="20">
+        <button class="fav-tag-custom-add" title="${t('添加')}">+</button>`;
     popover.appendChild(customRow);
 
     const customInput = customRow.querySelector('.fav-tag-custom-input');
@@ -764,7 +799,7 @@ async function _showTagPopover(anchor, entry, idx) {
             ? sortedTags.filter(t => t.toLowerCase().includes(kw))
             : sortedTags;
         if (filtered.length === 0) {
-            tagList.innerHTML = '<div class="fav-tag-empty">无匹配标签</div>';
+            tagList.innerHTML = `<div class="fav-tag-empty">${t('无匹配标签')}</div>`;
             return;
         }
         filtered.forEach(tag => {
@@ -783,15 +818,15 @@ async function _showTagPopover(anchor, entry, idx) {
             if (custom) {
                 const editBtn = document.createElement('button');
                 editBtn.className = 'fav-tag-edit';
-                editBtn.title = '重命名此分组标签（同步修改所有用户收藏）';
+                editBtn.title = t('重命名此分组标签（同步修改所有用户收藏）');
                 editBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     row.classList.add('is-editing');
                     row.innerHTML = `
-                        <input class="fav-tag-inline-input" value="${escapeHtml(tag)}" aria-label="重命名标签">
-                        <button class="fav-tag-inline-save" title="保存">✓</button>
-                        <button class="fav-tag-inline-cancel" title="取消">×</button>
+                        <input class="fav-tag-inline-input" value="${escapeHtml(tag)}" aria-label="${t('重命名标签')}">
+                        <button class="fav-tag-inline-save" title="${t('保存')}">✓</button>
+                        <button class="fav-tag-inline-cancel" title="${t('取消')}">×</button>
                     `;
 
                     const input = row.querySelector('.fav-tag-inline-input');
@@ -916,6 +951,9 @@ async function _showTagPopover(anchor, entry, idx) {
 // 已是 'interactive'/'complete'），此时再注册 DOMContentLoaded 监听器永远不会触发，
 // 导致所有按钮初始化、事件绑定都不执行（按钮可见但点不动）。故做 readyState 守卫。
 async function initApp() {
+    // i18n：确定界面语言并翻译静态 DOM（语言切换控件绑定也在其中）
+    await initI18n();
+
     // 设置搜索按钮更新函数（用于筛选条件变化时更新按钮状态）
     setSearchButtonUpdater(updateSearchButtonState);
 
@@ -1020,7 +1058,7 @@ async function initApp() {
     } catch (e) {
         logError('init', 'Tauri/桌面环境初始化失败', { message: e.message || String(e), isTauri: isTauri() });
         if (isTauri()) {
-            showToast('桌面环境初始化失败: ' + e.message, 'error');
+            showToast(t('桌面环境初始化失败: {{msg}}', { msg: e.message }), 'error');
         }
     }
 
@@ -1060,7 +1098,7 @@ async function initApp() {
     useCacheCheckbox.addEventListener('change', (e) => {
         state.useCache = e.target.checked;
         localStorage.setItem(STORAGE_KEYS.useCache, state.useCache);
-        showToast(state.useCache ? '已启用缓存' : '已禁用缓存', 'info');
+        showToast(state.useCache ? t('已启用缓存') : t('已禁用缓存'), 'info');
     });
 
     // 初始化统计概览自动加载开关
@@ -1068,7 +1106,7 @@ async function initApp() {
     autoLoadStatsCheckbox.checked = localStorage.getItem(STORAGE_KEYS.autoLoadStats) === 'true';
     autoLoadStatsCheckbox.addEventListener('change', (e) => {
         localStorage.setItem(STORAGE_KEYS.autoLoadStats, e.target.checked);
-        showToast(e.target.checked ? '搜索时将自动加载统计概览' : '已关闭自动加载统计概览', 'info');
+        showToast(e.target.checked ? t('搜索时将自动加载统计概览') : t('已关闭自动加载统计概览'), 'info');
     });
 
     // 初始化缓存时间配置
@@ -1080,12 +1118,14 @@ async function initApp() {
 
     cacheTimeValue.addEventListener('change', (e) => {
         localStorage.setItem(STORAGE_KEYS.cacheTimeValue, e.target.value);
-        showToast(`缓存有效期已更新为 ${e.target.value} ${cacheTimeUnit.options[cacheTimeUnit.selectedIndex].text}`, 'success');
+        const unitLabel = cacheTimeUnit.options[cacheTimeUnit.selectedIndex].text;
+        showToast(t('缓存有效期已更新为 {{value}} {{unit}}', { value: e.target.value, unit: unitLabel }), 'success');
     });
 
     cacheTimeUnit.addEventListener('change', (e) => {
         localStorage.setItem(STORAGE_KEYS.cacheTimeUnit, e.target.value);
-        showToast(`缓存有效期已更新为 ${cacheTimeValue.value} ${e.target.options[e.target.selectedIndex].text}`, 'success');
+        const unitLabel = e.target.options[e.target.selectedIndex].text;
+        showToast(t('缓存有效期已更新为 {{value}} {{unit}}', { value: cacheTimeValue.value, unit: unitLabel }), 'success');
     });
 
     // 初始化每页数量
@@ -1352,7 +1392,7 @@ async function initApp() {
                         updateFavoriteName(entry.query, newName);
                         const searchText = document.getElementById('favSearchInput')?.value || '';
                         renderFavoritesList(searchText);
-                        showToast('别名已更新', 'success');
+                        showToast(t('别名已更新'), 'success');
                     }
                 } else if (cancelBtn) {
                     const searchText = document.getElementById('favSearchInput')?.value || '';
@@ -1394,7 +1434,7 @@ async function initApp() {
                 const entry = getRenderedFavorite(idx);
                 if (entry && entry.query && !entry.system) {
                     removeFavorite(entry.query);
-                    showToast('已取消收藏', 'info');
+                    showToast(t('已取消收藏'), 'info');
                     const searchText = document.getElementById('favSearchInput')?.value || '';
                     renderFavoritesList(searchText);
                     updateFavoriteButtonState();
@@ -1427,7 +1467,7 @@ async function initApp() {
             // 选择标签后自动折叠 chip 行
             favChips.classList.remove('expanded');
             const toggle = document.getElementById('favChipsToggle');
-            if (toggle) toggle.textContent = '展开 ▼';
+            if (toggle) toggle.textContent = t('展开 ▼');
         });
     }
 
@@ -1438,7 +1478,7 @@ async function initApp() {
             const chips = document.getElementById('favChips');
             if (!chips) return;
             const expanded = chips.classList.toggle('expanded');
-            favChipsToggle.textContent = expanded ? '收起 ▲' : '展开 ▼';
+            favChipsToggle.textContent = expanded ? t('收起 ▲') : t('展开 ▼');
         });
     }
 
@@ -1474,5 +1514,5 @@ if (document.readyState === 'loading') {
 function saveAutoCheckUpdate(enabled) {
     state.autoCheckUpdate = enabled;
     localStorage.setItem(STORAGE_KEYS.autoCheckUpdate, enabled);
-    showToast(enabled ? '已开启自动检测更新' : '已关闭自动检测更新', 'info');
+    showToast(enabled ? t('已开启自动检测更新') : t('已关闭自动检测更新'), 'info');
 }

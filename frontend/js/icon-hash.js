@@ -5,6 +5,7 @@ import { submitFilterValue } from './ui.js';
 import { updateSearchButtonState } from './search.js';
 import { info as logInfo, error as logError } from './logger.js';
 import { isTauri, fetchUrlRaw } from './tauri-bridge.js';
+import { t } from './i18n/index.js';
 
 // ==================== 32-bit 整数运算辅助 ====================
 
@@ -247,12 +248,12 @@ export async function fetchIconFromUrl() {
     const urlInput = document.getElementById('iconHashUrlInput');
     const url = urlInput.value.trim();
     if (!url) {
-        showToast('请输入 favicon URL', 'error');
+        showToast(t('请输入 favicon URL'), 'error');
         return;
     }
 
     const useRust = isTauri();
-    showToast('正在获取 favicon...', 'info');
+    showToast(t('正在获取 favicon...'), 'info');
     logInfo('iconhash', '开始获取 favicon', { url, via: useRust ? 'rust' : 'fetch' });
     try {
         let bytes;
@@ -260,14 +261,14 @@ export async function fetchIconFromUrl() {
             // Rust 侧失败（HTTP 错/网络错/URL 非法）时 invoke 会 reject，进入下方 catch
             const raw = await fetchUrlRaw(url);
             if (!raw || !raw.data_base64) {
-                throw new Error('未返回数据');
+                throw new Error(t('未返回数据'));
             }
             bytes = base64ToBytes(raw.data_base64);
         } else {
             const response = await fetch(url);
             logInfo('iconhash', 'favicon 响应', { url, status: response.status, ok: response.ok });
             if (!response.ok) {
-                showToast(`获取失败: HTTP ${response.status}`, 'error');
+                showToast(t('获取失败: HTTP {{status}}', { status: response.status }), 'error');
                 return;
             }
             const buffer = await response.arrayBuffer();
@@ -276,10 +277,10 @@ export async function fetchIconFromUrl() {
         const hash = computeIconHash(bytes);
         logInfo('iconhash', 'favicon hash 计算完成', { url, via: useRust ? 'rust' : 'fetch', byteLength: bytes.length, hash });
         showIconHashResult(hash);
-        showToast('计算完成', 'success');
+        showToast(t('计算完成'), 'success');
     } catch (e) {
         logError('iconhash', 'favicon 获取失败', { url, via: useRust ? 'rust' : 'fetch', message: e.message || String(e) });
-        showToast(`获取失败: ${e.message}`, 'error');
+        showToast(t('获取失败: {{message}}', { message: e.message }), 'error');
     }
 }
 
@@ -298,16 +299,16 @@ export function handleIconFileSelect(event) {
  * 读取文件并计算 hash
  */
 function processFile(file) {
-    showToast('正在计算...', 'info');
+    showToast(t('正在计算...'), 'info');
     const reader = new FileReader();
     reader.onload = () => {
         const bytes = new Uint8Array(reader.result);
         const hash = computeIconHash(bytes);
         showIconHashResult(hash);
-        showToast('计算完成', 'success');
+        showToast(t('计算完成'), 'success');
     };
     reader.onerror = () => {
-        showToast('文件读取失败', 'error');
+        showToast(t('文件读取失败'), 'error');
     };
     reader.readAsArrayBuffer(file);
 }
@@ -326,12 +327,12 @@ export function showIconHashResult(hash) {
  */
 export async function copyIconHash() {
     if (!_lastIconHash) {
-        showToast('请先计算 hash', 'error');
+        showToast(t('请先计算 hash'), 'error');
         return;
     }
     try {
         await navigator.clipboard.writeText(_lastIconHash);
-        showToast('已复制到剪贴板', 'success');
+        showToast(t('已复制到剪贴板'), 'success');
     } catch {
         // 降级方案：部分 WebView 环境不支持 clipboard API
         const textarea = document.createElement('textarea');
@@ -342,9 +343,9 @@ export async function copyIconHash() {
         textarea.select();
         try {
             document.execCommand('copy');
-            showToast('已复制到剪贴板', 'success');
+            showToast(t('已复制到剪贴板'), 'success');
         } catch {
-            showToast('复制失败', 'error');
+            showToast(t('复制失败'), 'error');
         }
         document.body.removeChild(textarea);
     }
@@ -355,7 +356,7 @@ export async function copyIconHash() {
  */
 export function applyIconHashFilter() {
     if (!_lastIconHash) {
-        showToast('请先计算 hash', 'error');
+        showToast(t('请先计算 hash'), 'error');
         return;
     }
     // 使用 icon_hash 筛选：先回填输入框，再走 submitFilterValue
@@ -363,7 +364,7 @@ export function applyIconHashFilter() {
     if (hashInput) hashInput.value = _lastIconHash;
     submitFilterValue('icon_hash');
     closeIconHashModal();
-    showToast(`已填入筛选: icon_hash="${_lastIconHash}"`, 'success');
+    showToast(t('已填入筛选: icon_hash="{{hash}}"', { hash: _lastIconHash }), 'success');
 }
 
 /**
@@ -381,7 +382,7 @@ const ICON_HASH_CLAUSE_RE = /icon_hash\s*(!=|=)\s*"([^"]*)"/i;
  */
 export function applyIconHashToQuery() {
     if (!_lastIconHash) {
-        showToast('请先计算 hash', 'error');
+        showToast(t('请先计算 hash'), 'error');
         return;
     }
     const input = document.getElementById('searchInput');
@@ -407,5 +408,5 @@ export function applyIconHashToQuery() {
 
     updateSearchButtonState();
     closeIconHashModal();
-    showToast(`已填入查询语句: icon_hash="${_lastIconHash}"`, 'success');
+    showToast(t('已填入查询语句: icon_hash="{{hash}}"', { hash: _lastIconHash }), 'success');
 }

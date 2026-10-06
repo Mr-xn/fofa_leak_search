@@ -2,6 +2,7 @@
 
 import { STORAGE_KEYS } from './config.js';
 import { isTauri, saveExportFile } from './tauri-bridge.js';
+import { t } from './i18n/index.js';
 
 // ==================== Toast 提示 ====================
 export function showToast(message, type = 'info') {
@@ -44,8 +45,8 @@ export function showConfirm(messageOrOpts) {
         msgEl.innerHTML = opts.message || '';
 
         // 按钮文案
-        okBtn.textContent = opts.confirmText || '继续';
-        cancelBtn.textContent = opts.cancelText || '取消';
+        okBtn.textContent = opts.confirmText || t('继续');
+        cancelBtn.textContent = opts.cancelText || t('取消');
 
         modal.classList.add('show');
 
@@ -77,7 +78,7 @@ export function showConfirm(messageOrOpts) {
 // ==================== 数字格式化 ====================
 export function formatNumber(num) {
     if (num >= 10000) {
-        return (num / 10000).toFixed(1) + '万';
+        return t('{{n}}万', { n: (num / 10000).toFixed(1) });
     }
     return num.toLocaleString();
 }
@@ -89,10 +90,10 @@ export function formatTime(isoString) {
     const now = new Date();
     const diff = now - date;
 
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-    if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+    if (diff < 60000) return t('刚刚');
+    if (diff < 3600000) return t('{{n}}分钟前', { n: Math.floor(diff / 60000) });
+    if (diff < 86400000) return t('{{n}}小时前', { n: Math.floor(diff / 3600000) });
+    if (diff < 604800000) return t('{{n}}天前', { n: Math.floor(diff / 86400000) });
     return date.toLocaleDateString('zh-CN');
 }
 
@@ -122,11 +123,11 @@ export function formatCacheExpiry() {
     const value = parseInt(localStorage.getItem(STORAGE_KEYS.cacheTimeValue) || '1');
     const unit = localStorage.getItem(STORAGE_KEYS.cacheTimeUnit) || 'days';
     const unitNames = {
-        'hours': '小时',
-        'days': '天',
-        'months': '个月'
+        'hours': t('小时'),
+        'days': t('天'),
+        'months': t('个月')
     };
-    return `${value} ${unitNames[unit] || '天'}`;
+    return `${value} ${unitNames[unit] || t('天')}`;
 }
 
 // ==================== 获取缓存过期时间（毫秒）====================
@@ -223,10 +224,10 @@ export function buildCsvText(rows, fields, opts = {}) {
         .join(',');
     let metaRow = '';
     if (opts.includeQuery) {
-        const queryStr = opts.query || '(无)';
+        const queryStr = opts.query || t('(无)');
         const exportTime = opts.exportTime || new Date().toLocaleString('zh-CN', { hour12: false });
         const escapedQuery = String(queryStr).replace(/"/g, '""');
-        metaRow = `"查询: ${escapedQuery}    导出时间: ${exportTime}    条数: ${rows.length}",`
+        metaRow = `"${t('查询: {{query}}    导出时间: {{time}}    条数: {{count}}', { query: escapedQuery, time: exportTime, count: rows.length })}",`
             + fields.slice(1).map(() => '').join(',') + '\n';
     }
     const body = rows.map(row =>

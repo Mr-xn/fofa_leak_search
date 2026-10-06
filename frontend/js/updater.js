@@ -4,6 +4,7 @@ import { APP_VERSION, STORAGE_KEYS, state } from './config.js';
 import { showToast } from './utils.js';
 import { checkGitHubUpdate } from './tauri-bridge.js';
 import { info as logInfo, warn as logWarn, error as logError } from './logger.js';
+import { t } from './i18n/index.js';
 
 const GITHUB_REPO = 'Mr-xn/fofa_leak_search';
 const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -105,7 +106,7 @@ export async function checkForUpdates(silent = false) {
     if (!release) {
         logWarn('updater', '检查更新失败：未获取到 release', { silent, currentVersion });
         if (!silent) {
-            showToast('检查更新失败，请检查网络连接', 'error');
+            showToast(t('检查更新失败，请检查网络连接'), 'error');
         }
         return { hasUpdate: false, currentVersion };
     }
@@ -130,7 +131,7 @@ export async function checkForUpdates(silent = false) {
     }
 
     if (!silent) {
-        showToast('已是最新版本', 'success');
+        showToast(t('已是最新版本'), 'success');
     }
     return { hasUpdate: false, currentVersion };
 }
@@ -139,7 +140,7 @@ export async function checkForUpdates(silent = false) {
  * 手动检查更新（从设置面板触发）
  */
 export async function manualCheckUpdate() {
-    showToast('正在检查更新...', 'info');
+    showToast(t('正在检查更新...'), 'info');
     return await checkForUpdates(false);
 }
 
@@ -171,13 +172,13 @@ function showUpdateBanner(version, url) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
             </svg>
-            发现新版本 <strong>${version}</strong>，建议更新以获得最新功能和安全修复
+            ${t('发现新版本 <strong>{{version}}</strong>，建议更新以获得最新功能和安全修复', { version })}
         </span>
         <div class="update-banner-actions">
             <a class="update-banner-link" onclick="event.preventDefault();window.openUrl('${url}')" href="${url}">
-                前往下载 →
+                ${t('前往下载 →')}
             </a>
-            <button class="update-banner-close" onclick="this.parentElement.parentElement.remove()" title="关闭">
+            <button class="update-banner-close" onclick="this.parentElement.parentElement.remove()" title="${t('关闭')}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>

@@ -7,6 +7,7 @@ import { fetchSearchResults } from './api.js';
 import { incrementDownloads, incrementApiCalls, incrementDataCount } from './storage.js';
 import { info as logInfo, warn as logWarn, error as logError, debug as logDebug } from './logger.js';
 import { openUrl } from './tauri-bridge.js';
+import { t } from './i18n/index.js';
 
 // 延迟注入：打破 search.js ↔ results.js 循环依赖
 let _fetchResults = null;
@@ -190,8 +191,8 @@ export function renderTable(fields) {
                 return `
                 <div class="th ft-th ft-col-${colIndex}" onclick="window.sortTable(${index})" data-field="${field}" data-col="${colIndex}" style="cursor: pointer; width: var(--col-${colIndex});">
                     <span class="th-inner">
-                        <span class="th-label">${FIELD_LABELS[field] || field} <span class="sort-icon" id="sort-${index}">↕</span></span>
-                        <span class="copy-col-btn" onclick="event.stopPropagation(); window.copyColumn(${index})" title="复制此列">📋</span>
+                        <span class="th-label">${t(FIELD_LABELS[field] || field)} <span class="sort-icon" id="sort-${index}">↕</span></span>
+                        <span class="copy-col-btn" onclick="event.stopPropagation(); window.copyColumn(${index})" title="${t('复制此列')}">📋</span>
                     </span>${handle}
                 </div>
                 `;
@@ -253,7 +254,7 @@ window.startColumnResize = startResize;
 // 复制指定列的所有数据到剪贴板
 export function copyColumn(columnIndex) {
     if (!state.results || state.results.length === 0) {
-        showToast('没有可复制的数据', 'error');
+        showToast(t('没有可复制的数据'), 'error');
         return;
     }
 
@@ -263,12 +264,12 @@ export function copyColumn(columnIndex) {
         .join('\n');
 
     if (!columnData) {
-        showToast('该列无数据', 'error');
+        showToast(t('该列无数据'), 'error');
         return;
     }
 
     navigator.clipboard.writeText(columnData).then(() => {
-        showToast(`已复制 ${state.results.length} 条数据`, 'success');
+        showToast(t('已复制 {{n}} 条数据', { n: state.results.length }), 'success');
     }).catch(() => {
         // 降级方案
         const textarea = document.createElement('textarea');
@@ -277,7 +278,7 @@ export function copyColumn(columnIndex) {
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
-        showToast(`已复制 ${state.results.length} 条数据`, 'success');
+        showToast(t('已复制 {{n}} 条数据', { n: state.results.length }), 'success');
     });
 }
 
@@ -362,7 +363,7 @@ export function renderPagination(pageSize) {
 
     pagination.innerHTML = `
         <button class="page-btn" onclick="window.goToPage(${state.currentPage - 1})" ${state.currentPage === 1 ? 'disabled' : ''}>
-            ← 上一页
+            ${t('← 上一页')}
         </button>
         ${pages.map(page => {
             if (page === '...') {
@@ -375,9 +376,9 @@ export function renderPagination(pageSize) {
             `;
         }).join('')}
         <button class="page-btn" onclick="window.goToPage(${state.currentPage + 1})" ${state.currentPage === totalPages ? 'disabled' : ''}>
-            下一页 →
+            ${t('下一页 →')}
         </button>
-        <span class="page-info">共 ${formatNumber(state.totalResults)} 条结果</span>
+        <span class="page-info">${t('共 {{n}} 条结果', { n: formatNumber(state.totalResults) })}</span>
     `;
     pagination.classList.add('show');
 }
@@ -423,7 +424,7 @@ export function updateDownloadProgress(status, current, total, details = '') {
         const percent = Math.round((current / total) * 100);
         barEl.style.width = `${percent}%`;
     }
-    if (infoEl) infoEl.textContent = details || `${current} / ${total} 页`;
+    if (infoEl) infoEl.textContent = details || t('{{current}} / {{total}} 页', { current, total });
 }
 
 // 保存下载页码范围设置
@@ -450,7 +451,7 @@ function restoreDownloadRange() {
 // 批量打开当前页所有链接
 export async function openAllLinks() {
     if (!state.results || state.results.length === 0) {
-        showToast('没有可打开的链接', 'error');
+        showToast(t('没有可打开的链接'), 'error');
         return;
     }
 
@@ -458,7 +459,7 @@ export async function openAllLinks() {
     const linkIndex = fields.indexOf('link');
 
     if (linkIndex === -1) {
-        showToast('当前未选择「链接」字段', 'error');
+        showToast(t('当前未选择「链接」字段'), 'error');
         return;
     }
 
@@ -467,14 +468,14 @@ export async function openAllLinks() {
         .filter(url => url && typeof url === 'string' && /^https?:\/\//i.test(url.trim()));
 
     if (urls.length === 0) {
-        showToast('当前页无有效链接', 'info');
+        showToast(t('当前页无有效链接'), 'info');
         return;
     }
 
     if (urls.length > 20) {
-        const confirmed = await showConfirm(`将一次性打开 ${urls.length} 个链接，可能导致浏览器卡顿。\n建议减少每页条数后分批打开。\n\n是否继续？`);
+        const confirmed = await showConfirm(t('将一次性打开 {{n}} 个链接，可能导致浏览器卡顿。\n建议减少每页条数后分批打开。\n\n是否继续？', { n: urls.length }));
         if (!confirmed) {
-            showToast('已取消打开', 'info');
+            showToast(t('已取消打开'), 'info');
             return;
         }
     }
@@ -483,13 +484,13 @@ export async function openAllLinks() {
         setTimeout(() => openUrl(url.trim()), i * 300);
     });
 
-    showToast(`已开始打开 ${urls.length} 个链接`, 'success');
+    showToast(t('已开始打开 {{n}} 个链接', { n: urls.length }), 'success');
 }
 
 // 下载当前页数据
 export async function downloadCurrentPage() {
     if (!state.results || state.results.length === 0) {
-        showToast('没有可下载的数据', 'error');
+        showToast(t('没有可下载的数据'), 'error');
         return;
     }
 
@@ -499,13 +500,13 @@ export async function downloadCurrentPage() {
 
     const savedPath = await downloadCSV(fields, data, filename);
     incrementDownloads();
-    showToast(`已下载第 ${state.currentPage} 页数据 (${data.length} 条)${savedPath ? ' → ' + savedPath : ''}`, 'success');
+    showToast(t('已下载第 {{page}} 页数据 ({{n}} 条){{suffix}}', { page: state.currentPage, n: data.length, suffix: savedPath ? ' → ' + savedPath : '' }), 'success');
 }
 
 // 下载所有页数据（通过 API 获取）
 export async function downloadAllPages() {
     if (!state.currentQuery) {
-        showToast('请先执行搜索', 'error');
+        showToast(t('请先执行搜索'), 'error');
         return;
     }
 
@@ -539,104 +540,104 @@ function showDownloadDialog(totalPages) {
     dialog.id = 'downloadModal';
     dialog.innerHTML = `
         <div class="modal">
-            <h2 class="modal-title">📥 下载数据</h2>
+            <h2 class="modal-title">${t('📥 下载数据')}</h2>
             <div style="margin-bottom: 16px;">
                 <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                    查询结果共 <strong>${formatNumber(state.totalResults)}</strong> 条，共 <strong>${totalPages}</strong> 页
+                    ${t('查询结果共 <strong>{{total}}</strong> 条，共 <strong>{{pages}}</strong> 页', { total: formatNumber(state.totalResults), pages: totalPages })}
                 </p>
                 <div style="background: var(--bg); border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px;">
-                    <p>💡 当前每页设置: <strong>${pageSize}</strong> 条</p>
-                    <p>💡 账户单次查询限制: <strong>${formatNumber(maxSize)}</strong> 条/次</p>
-                    <p>💡 每月免费数据配额: <strong>${isUnlimited ? '不限' : formatNumber(remainApiData)}</strong> 条</p>
-                    <p style="color: #22c55e; font-weight: 500;">✅ 免费下载上限: <strong>${formatNumber(freeDownloadLimit)}</strong> 条（不扣F点）</p>
+                    <p>${t('💡 当前每页设置: <strong>{{n}}</strong> 条', { n: pageSize })}</p>
+                    <p>${t('💡 账户单次查询限制: <strong>{{n}}</strong> 条/次', { n: formatNumber(maxSize) })}</p>
+                    <p>${t('💡 每月免费数据配额: <strong>{{quota}}</strong> 条', { quota: isUnlimited ? t('不限') : formatNumber(remainApiData) })}</p>
+                    <p style="color: #22c55e; font-weight: 500;">${t('✅ 免费下载上限: <strong>{{n}}</strong> 条（不扣F点）', { n: formatNumber(freeDownloadLimit) })}</p>
                     ${canOneClick
-                        ? '<p style="color: #22c55e;">✅ 结果数未超限，支持一键下载</p>'
-                        : '<p style="color: #f59e0b;">⚠️ 结果数超限，超出部分将消耗 F点</p>'
+                        ? `<p style="color: #22c55e;">${t('✅ 结果数未超限，支持一键下载')}</p>`
+                        : `<p style="color: #f59e0b;">${t('⚠️ 结果数超限，超出部分将消耗 F点')}</p>`
                     }
                 </div>
 
                 <div style="background: #fef3c7; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px;">
-                    <p style="color: #92400e; font-weight: 500;">⚠️ F点扣费规则</p>
+                    <p style="color: #92400e; font-weight: 500;">${t('⚠️ F点扣费规则')}</p>
                     <p style="color: #92400e; margin-top: 4px;">
-                        • 下载量超过 <strong>${formatNumber(freeDownloadLimit)}</strong> 条时，超出部分消耗 F点<br>
-                        • 扣费比例：<strong>1 F点 = 1 条数据</strong><br>
-                        • 默认禁止使用 F点，防止意外扣费<br>
-                        • 如需下载超出免费上限的数据，请手动开启下方开关
+                        ${t('• 下载量超过 <strong>{{n}}</strong> 条时，超出部分消耗 F点', { n: formatNumber(freeDownloadLimit) })}<br>
+                        ${t('• 扣费比例：<strong>1 F点 = 1 条数据</strong>')}<br>
+                        ${t('• 默认禁止使用 F点，防止意外扣费')}<br>
+                        ${t('• 如需下载超出免费上限的数据，请手动开启下方开关')}
                     </p>
                 </div>
 
                 <div class="config-item" style="display: flex; align-items: center; gap: 8px;">
                     <input type="checkbox" id="allowUseFPoints" style="width: 16px; height: 16px; cursor: pointer;">
                     <label for="allowUseFPoints" style="cursor: pointer; user-select: none;">
-                        允许使用 F点（当前余额: <strong>${formatNumber(fofaPoint)}</strong>）
+                        ${t('允许使用 F点（当前余额: <strong>{{balance}}</strong>）', { balance: formatNumber(fofaPoint) })}
                     </label>
                 </div>
 
                 <div class="config-item">
-                    <label>下载范围</label>
+                    <label>${t('下载范围')}</label>
                     <select id="downloadRange">
-                        <option value="current">仅当前页</option>
-                        ${canOneClick ? '<option value="oneclick" selected>一键下载全部（推荐）</option>' : ''}
-                        <option value="custom">自定义页数</option>
-                        <option value="all">全部分页下载</option>
+                        <option value="current">${t('仅当前页')}</option>
+                        ${canOneClick ? `<option value="oneclick" selected>${t('一键下载全部（推荐）')}</option>` : ''}
+                        <option value="custom">${t('自定义页数')}</option>
+                        <option value="all">${t('全部分页下载')}</option>
                     </select>
                 </div>
                 <div id="customPageRange" style="display: none; margin-top: 12px;">
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <div class="config-item" style="flex: 1;">
-                            <label>起始页</label>
+                            <label>${t('起始页')}</label>
                             <input type="number" id="downloadStartPage" value="${defaultStartPage}" min="1" max="${totalPages}">
                         </div>
                         <div class="config-item" style="flex: 1;">
-                            <label>结束页</label>
+                            <label>${t('结束页')}</label>
                             <input type="number" id="downloadEndPage" value="${defaultEndPage}" min="1" max="${totalPages}">
                         </div>
                     </div>
                     <div id="customEstimate" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary); background: var(--bg); border-radius: 4px; padding: 8px;">
-                        <p>预估下载: <strong id="estimateCount">${Math.min(10, totalPages) * pageSize}</strong> 条</p>
-                        <p>预估API调用: <strong id="estimateCalls">${Math.min(10, totalPages)}</strong> 次</p>
+                        <p>${t('预估下载: <strong id="estimateCount">{{n}}</strong> 条', { n: Math.min(10, totalPages) * pageSize })}</p>
+                        <p>${t('预估API调用: <strong id="estimateCalls">{{n}}</strong> 次', { n: Math.min(10, totalPages) })}</p>
                         <p id="estimateFreeInfo" style="color: #22c55e; margin-top: 4px;">
-                            ✅ 在免费范围内，不扣F点
+                            ${t('✅ 在免费范围内，不扣F点')}
                         </p>
                         <p id="estimateFPoints" style="display: none; color: #dc2626; margin-top: 4px; font-weight: 500;">
-                            ⚠️ 超出免费上限 <strong id="estimateOverage">0</strong> 条，将消耗 <strong id="estimateFPointsCount">0</strong> F点
+                            ${t('⚠️ 超出免费上限 <strong id="estimateOverage">0</strong> 条，将消耗 <strong id="estimateFPointsCount">0</strong> F点')}
                         </p>
                     </div>
                     <div style="margin-top: 8px; font-size: 11px; color: var(--primary); background: #eff6ff; border-radius: 4px; padding: 8px;">
-                        💡 <strong>安全测试建议</strong>：先下载 1-2 页（${pageSize}-${pageSize * 2} 条）测试效果
+                        ${t('💡 <strong>安全测试建议</strong>：先下载 1-2 页（{{a}}-{{b}} 条）测试效果', { a: pageSize, b: pageSize * 2 })}
                     </div>
                 </div>
 
                 <div style="margin-top: 12px; padding: 10px; background: var(--bg); border-radius: 6px; font-size: 12px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                        <label for="downloadConcurrency" style="white-space: nowrap;">⚡ 并发数:</label>
+                        <label for="downloadConcurrency" style="white-space: nowrap;">${t('⚡ 并发数:')}</label>
                         <select id="downloadConcurrency" style="flex: 1;">
-                            <option value="1">1（串行，最稳定）</option>
-                            <option value="3">3（稳定）</option>
-                            <option value="5" selected>5（推荐）</option>
-                            <option value="10">10（较快）</option>
-                            <option value="20">20（激进，可能被限流）</option>
+                            <option value="1">${t('1（串行，最稳定）')}</option>
+                            <option value="3">${t('3（稳定）')}</option>
+                            <option value="5" selected>${t('5（推荐）')}</option>
+                            <option value="10">${t('10（较快）')}</option>
+                            <option value="20">${t('20（激进，可能被限流）')}</option>
                         </select>
                     </div>
                     <p style="color: var(--text-muted); font-size: 11px;">
-                        并发数越高下载越快，但可能触发 FOFA 限流。建议 5-10。
+                        ${t('并发数越高下载越快，但可能触发 FOFA 限流。建议 5-10。')}
                     </p>
                 </div>
 
                 <div id="allDownloadInfo" style="display: none; margin-top: 12px; background: #fef3c7; border-radius: 6px; padding: 10px; font-size: 12px;">
-                    <p style="color: #92400e; font-weight: 500;">⚠️ 全部分页下载说明</p>
+                    <p style="color: #92400e; font-weight: 500;">${t('⚠️ 全部分页下载说明')}</p>
                     <p style="color: #92400e; margin-top: 4px;">
-                        将下载 ${formatNumber(state.totalResults)} 条数据，需要 <strong>${totalPages}</strong> 次API调用。
+                        ${t('将下载 {{n}} 条数据，需要 <strong>{{pages}}</strong> 次API调用。', { n: formatNumber(state.totalResults), pages: totalPages })}
                         ${state.totalResults > freeDownloadLimit
-                            ? `<br><strong style="color: #dc2626;">⚠️ 超出免费上限 ${formatNumber(state.totalResults - freeDownloadLimit)} 条，需消耗 ${formatNumber(state.totalResults - freeDownloadLimit)} F点！</strong>`
-                            : '<br><span style="color: #22c55e;">✅ 在免费范围内，不扣F点</span>'
+                            ? `<br><strong style="color: #dc2626;">${t('⚠️ 超出免费上限 {{n}} 条，需消耗 {{p}} F点！', { n: formatNumber(state.totalResults - freeDownloadLimit), p: formatNumber(state.totalResults - freeDownloadLimit) })}</strong>`
+                            : `<br><span style="color: #22c55e;">${t('✅ 在免费范围内，不扣F点')}</span>`
                         }
                     </p>
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeDownloadModal()">取消</button>
-                <button class="btn btn-primary" id="startDownloadBtn" onclick="startDownload()">开始下载</button>
+                <button class="btn btn-secondary" onclick="closeDownloadModal()">${t('取消')}</button>
+                <button class="btn btn-primary" id="startDownloadBtn" onclick="startDownload()">${t('开始下载')}</button>
             </div>
         </div>
     `;
@@ -742,14 +743,14 @@ export async function startDownload() {
         }
 
         if (isNaN(startPage) || isNaN(endPage) || startPage > endPage || startPage < 1) {
-            showToast('页码范围无效', 'error');
+            showToast(t('页码范围无效'), 'error');
             return;
         }
 
         // 检查是否超出免费上限
         if (totalDownload > freeDownloadLimit && !allowUseFPoints) {
             const overage = totalDownload - freeDownloadLimit;
-            showToast(`下载量超出免费上限 ${formatNumber(overage)} 条，将消耗 ${formatNumber(overage)} F点。请勾选"允许使用F点"后重试`, 'error');
+            showToast(t('下载量超出免费上限 {{n}} 条，将消耗 {{p}} F点。请勾选"允许使用F点"后重试', { n: formatNumber(overage), p: formatNumber(overage) }), 'error');
             return;
         }
 
@@ -762,7 +763,7 @@ export async function startDownload() {
 
         // 显示统一的进度展示区域
         showDownloadProgress();
-        updateDownloadProgress('准备下载...', 0, totalPages);
+        updateDownloadProgress(t('准备下载...'), 0, totalPages);
 
         if (range === 'oneclick') {
             await downloadAllAtOnce(state.totalResults, fields);
@@ -771,7 +772,7 @@ export async function startDownload() {
         }
     } catch (error) {
         logError('download', '下载任务失败', { message: error.message || String(error), query: state.currentQuery });
-        showToast(`下载出错: ${error.message || '未知错误'}`, 'error');
+        showToast(t('下载出错: {{msg}}', { msg: error.message || t('未知错误') }), 'error');
         hideDownloadProgress();
     }
 }
@@ -803,10 +804,10 @@ async function downloadPageRange(startPage, endPage, pageSize, fields, concurren
 
     // 策略选择：如果总数小于等于账户限制，且是连续从第1页开始，一次性查询
     if (totalToDownload <= maxSize && startPage === 1) {
-        showToast(`正在一次性下载 ${totalToDownload} 条数据...`, 'info');
+        showToast(t('正在一次性下载 {{n}} 条数据...', { n: totalToDownload }), 'info');
         await downloadAllAtOnce(totalToDownload, fields);
     } else {
-        showToast(`开始下载第 ${startPage}-${endPage} 页数据（并发: ${concurrency}）...`, 'info');
+        showToast(t('开始下载第 {{start}}-{{end}} 页数据（并发: {{n}}）...', { start: startPage, end: endPage, n: concurrency }), 'info');
         await downloadPageByPage(startPage, endPage, pageSize, fields, concurrency);
     }
 }
@@ -816,27 +817,27 @@ async function downloadAllAtOnce(size, fields) {
     const maxRetries = 3;
     let retryCount = 0;
 
-    updateDownloadProgress('正在获取数据...', 0, 1);
+    updateDownloadProgress(t('正在获取数据...'), 0, 1);
 
     while (retryCount < maxRetries) {
         try {
             const data = await fetchSearchResults(state.currentQuery, 1, size, fields, state.searchFull || false);
 
             if (data.error) {
-                throw new Error(data.errmsg || '未知错误');
+                throw new Error(data.errmsg || t('未知错误'));
             }
 
             if (!data.results || data.results.length === 0) {
-                updateDownloadProgress('下载失败', 0, 0, '未获取到数据');
-                showToast('未获取到数据', 'error');
+                updateDownloadProgress(t('下载失败'), 0, 0, t('未获取到数据'));
+                showToast(t('未获取到数据'), 'error');
                 setTimeout(hideDownloadProgress, 3000);
                 return;
             }
 
-            updateDownloadProgress('正在保存文件...', 1, 1);
+            updateDownloadProgress(t('正在保存文件...'), 1, 1);
 
             const fieldList = fields.split(',');
-            const filename = `fofa_all_${data.results.length}条_${getTimestamp()}.csv`;
+            const filename = t('fofa_all_{{n}}条_{{ts}}.csv', { n: data.results.length, ts: getTimestamp() });
             await downloadCSV(fieldList, data.results, filename);
             incrementDownloads();
             incrementDataCount(data.results.length);
@@ -846,11 +847,11 @@ async function downloadAllAtOnce(size, fields) {
             if (data.results.length > freeLimit) {
                 const fPointsUsed = data.results.length - freeLimit;
                 incrementApiCalls(fPointsUsed);
-                updateDownloadProgress('下载完成', 1, 1, `${data.results.length} 条数据已保存（消耗 ${fPointsUsed} F点）`);
-                showToast(`下载完成: ${data.results.length} 条数据（消耗 ${fPointsUsed} F点）`, 'success');
+                updateDownloadProgress(t('下载完成'), 1, 1, t('{{n}} 条数据已保存（消耗 {{p}} F点）', { n: data.results.length, p: fPointsUsed }));
+                showToast(t('下载完成: {{n}} 条数据（消耗 {{p}} F点）', { n: data.results.length, p: fPointsUsed }), 'success');
             } else {
-                updateDownloadProgress('下载完成', 1, 1, `${data.results.length} 条数据已保存`);
-                showToast(`下载完成: ${data.results.length} 条数据`, 'success');
+                updateDownloadProgress(t('下载完成'), 1, 1, t('{{n}} 条数据已保存', { n: data.results.length }));
+                showToast(t('下载完成: {{n}} 条数据', { n: data.results.length }), 'success');
             }
             setTimeout(hideDownloadProgress, 5000);
             return;
@@ -858,15 +859,15 @@ async function downloadAllAtOnce(size, fields) {
         } catch (error) {
             retryCount++;
             if (retryCount < maxRetries) {
-                updateDownloadProgress(`下载失败，${retryCount}秒后重试...`, 0, 1);
-                showToast(`下载失败，${retryCount}秒后重试...`, 'warning');
+                updateDownloadProgress(t('下载失败，{{n}}秒后重试...', { n: retryCount }), 0, 1);
+                showToast(t('下载失败，{{n}}秒后重试...', { n: retryCount }), 'warning');
                 await sleep(retryCount * 1000);
             }
         }
     }
 
-    updateDownloadProgress('下载失败', 0, 0, '已重试3次');
-    showToast('下载失败，已重试3次', 'error');
+    updateDownloadProgress(t('下载失败'), 0, 0, t('已重试3次'));
+    showToast(t('下载失败，已重试3次'), 'error');
     setTimeout(hideDownloadProgress, 3000);
 }
 
@@ -880,7 +881,7 @@ async function downloadPageByPage(startPage, endPage, pageSize, fields, concurre
     let failedPages = [];
     let completedPages = 0;
 
-    updateDownloadProgress(`并发下载中（${batchSize}个请求/批）`, 0, totalPages);
+    updateDownloadProgress(t('并发下载中（{{n}}个请求/批）', { n: batchSize }), 0, totalPages);
 
     // 分批处理
     for (let batchStart = startPage; batchStart <= endPage; batchStart += batchSize) {
@@ -913,9 +914,9 @@ async function downloadPageByPage(startPage, endPage, pageSize, fields, concurre
 
         // 更新进度（实时展示）
         const statusText = failedPages.length > 0
-            ? `下载中... ${failedPages.length} 页失败`
-            : '下载中...';
-        updateDownloadProgress(statusText, completedPages, totalPages, `${completedPages} / ${totalPages} 页，已获取 ${allResults.length} 条`);
+            ? t('下载中... {{n}} 页失败', { n: failedPages.length })
+            : t('下载中...');
+        updateDownloadProgress(statusText, completedPages, totalPages, t('{{done}} / {{total}} 页，已获取 {{n}} 条', { done: completedPages, total: totalPages, n: allResults.length }));
 
         // 批次间延迟，避免请求过快被限流（根据并发数动态调整）
         if (batchEnd < endPage) {
@@ -925,33 +926,33 @@ async function downloadPageByPage(startPage, endPage, pageSize, fields, concurre
     }
 
     if (allResults.length === 0) {
-        updateDownloadProgress('下载失败', 0, 0, '未获取到数据');
-        showToast('下载失败，未获取到数据', 'error');
+        updateDownloadProgress(t('下载失败'), 0, 0, t('未获取到数据'));
+        showToast(t('下载失败，未获取到数据'), 'error');
         // 延迟隐藏进度区域
         setTimeout(hideDownloadProgress, 3000);
         return;
     }
 
     const fieldList = fields.split(',');
-    const filename = `fofa_pages${startPage}-${endPage}_${allResults.length}条_${getTimestamp()}.csv`;
+    const filename = t('fofa_pages{{start}}-{{end}}_{{n}}条_{{ts}}.csv', { start: startPage, end: endPage, n: allResults.length, ts: getTimestamp() });
     await downloadCSV(fieldList, allResults, filename);
     incrementDownloads();
     incrementDataCount(allResults.length);
 
     // 计算并统计超出免费上限的F点消耗
     const freeLimit = getFreeDownloadLimit();
-    let msg = `下载完成: ${allResults.length} 条数据`;
+    let msg = t('下载完成: {{n}} 条数据', { n: allResults.length });
     if (allResults.length > freeLimit) {
         const fPointsUsed = allResults.length - freeLimit;
         incrementApiCalls(fPointsUsed);
-        msg += `（消耗 ${fPointsUsed} F点）`;
+        msg += t('（消耗 {{p}} F点）', { p: fPointsUsed });
     }
     if (failedPages.length > 0) {
-        msg += `，${failedPages.length} 页失败`;
+        msg += t('，{{n}} 页失败', { n: failedPages.length });
     }
 
     // 更新进度为完成状态
-    updateDownloadProgress('下载完成', totalPages, totalPages, `${allResults.length} 条数据已保存`);
+    updateDownloadProgress(t('下载完成'), totalPages, totalPages, t('{{n}} 条数据已保存', { n: allResults.length }));
     showToast(msg, failedPages.length > 0 ? 'warning' : 'success');
 
     // 延迟隐藏进度区域
@@ -966,7 +967,7 @@ async function fetchWithRetry(query, page, pageSize, fields, maxRetries) {
         try {
             const data = await fetchSearchResults(query, page, pageSize, fields, state.searchFull || false);
             if (data.error) {
-                throw new Error(data.errmsg || '请求失败');
+                throw new Error(data.errmsg || t('请求失败'));
             }
             return data;
         } catch (error) {
@@ -986,7 +987,8 @@ async function downloadCSV(fields, data, filename) {
     // CSV 拼装统一走 buildCsvText（与智能下载导出共用同一实现）
     const includeQuery = localStorage.getItem(STORAGE_KEYS.exportIncludeQuery) === 'true';
     const csvContent = buildCsvText(data, fields, {
-        includeQuery, query: state.currentQuery, fieldLabels: FIELD_LABELS
+        includeQuery, query: state.currentQuery,
+        fieldLabels: Object.fromEntries(Object.entries(FIELD_LABELS).map(([k, v]) => [k, t(v)]))
     });
     try {
         // 桌面端 Rust 原生写盘（绕开 WebView 下载栈），失败自动降级 blob 下载
@@ -997,12 +999,12 @@ async function downloadCSV(fields, data, filename) {
         }
         logInfo('download', '导出保存完成', { filename, savedPath: path || '(web 下载)', dirFallback: !!dirFallback });
         if (dirFallback) {
-            showToast(`保存位置不可用，已保存到系统「下载」目录: ${path}`, 'warning');
+            showToast(t('保存位置不可用，已保存到系统「下载」目录: {{path}}', { path }), 'warning');
         }
         return path;
     } catch (e) {
         logError('download', '导出失败', { filename, error: e.message || String(e) });
-        showToast(`导出失败: ${e.message || e}`, 'error');
+        showToast(t('导出失败: {{msg}}', { msg: e.message || e }), 'error');
         return null;
     }
 }

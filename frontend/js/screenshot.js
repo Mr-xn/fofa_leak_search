@@ -1,5 +1,7 @@
 // js/screenshot.js - 通用 DOM 节点 → PNG 下载（基于本地内置 html2canvas）
 
+import { t } from './i18n/index.js';
+
 /**
  * 生成本地时间戳字符串 YYYYMMDD-HHmmss
  * @returns {string}
@@ -35,10 +37,10 @@ function triggerDownload(blob, filename) {
  */
 export async function downloadNodeScreenshot(node, filenamePrefix) {
     if (!node) {
-        throw new Error('节点不存在');
+        throw new Error(t('节点不存在'));
     }
     if (typeof window.html2canvas !== 'function') {
-        throw new Error('截图库未加载');
+        throw new Error(t('截图库未加载'));
     }
     const canvas = await window.html2canvas(node, {
         backgroundColor: null,
@@ -50,7 +52,7 @@ export async function downloadNodeScreenshot(node, filenamePrefix) {
         canvas.toBlob(resolve, 'image/png');
     });
     if (!blob) {
-        throw new Error('生成图片失败');
+        throw new Error(t('生成图片失败'));
     }
     triggerDownload(blob, `${filenamePrefix}_${timestamp()}.png`);
 }

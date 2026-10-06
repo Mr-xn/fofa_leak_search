@@ -16,6 +16,25 @@ fn get_proxy_port(state: tauri::State<'_, ProxyPort>) -> u16 {
     *state.port.lock().unwrap()
 }
 
+/// 系统界面语言（供前端 i18n 判定）：按 LC_ALL > LC_MESSAGES > LANG 取值，
+/// C/POSIX 视为未设置；返回形如 zh-CN / en-US，取不到时返回空串
+#[tauri::command]
+fn get_system_locale() -> String {
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim();
+            if v.is_empty() || v == "C" || v == "POSIX" {
+                continue;
+            }
+            let base = v.split(['.', '@']).next().unwrap_or("");
+            if !base.is_empty() {
+                return base.replace('_', "-");
+            }
+        }
+    }
+    String::new()
+}
+
 /// 设置外部代理配置（供前端调用）
 #[tauri::command]
 fn set_proxy_config_cmd(
@@ -290,8 +309,23 @@ fn validate_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// WKWebView 默认跟随系统「使用智能引号和破折号」，把查询里的 `"` 改写成 `“`，破坏 FOFA 语法。
+/// WebKit（TextCheckerMac.mm）只要发现应用域存在该 key 就不再看系统开关，故启动时显式写 false 覆盖。
+#[cfg(target_os = "macos")]
+fn disable_automatic_text_substitution() {
+    use objc2_foundation::{ns_string, NSUserDefaults};
+
+    let defaults = NSUserDefaults::standardUserDefaults();
+    defaults.setBool_forKey(false, ns_string!("WebAutomaticQuoteSubstitutionEnabled"));
+    defaults.setBool_forKey(false, ns_string!("WebAutomaticDashSubstitutionEnabled"));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // macOS：在创建 WebView 前关闭 WebKit 自动引号/破折号替换
+    #[cfg(target_os = "macos")]
+    disable_automatic_text_substitution();
+
     // 创建共享的代理状态（Clone，Tauri 和代理服务器共用）
     let proxy_state = proxy::AppState::new_shared();
 
@@ -349,7 +383,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_proxy_port, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, fetch_url_raw_cmd, save_export_file, pick_export_dir, dedup::dedup_results, dedup::dedup_single])
+        .invoke_handler(tauri::generate_handler![get_proxy_port, get_system_locale, set_proxy_config_cmd, get_proxy_config_cmd, set_request_config_cmd, get_request_config_cmd, open_url, check_github_update_cmd, fetch_url_raw_cmd, save_export_file, pick_export_dir, dedup::dedup_results, dedup::dedup_single])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

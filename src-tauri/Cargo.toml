@@ -1,6 +1,6 @@
 [package]
 name = "fofa-leak-search"
-version = "1.2.12"
+version = "1.2.13"
 description = "FOFA Leak Search Desktop Application"
 edition = "2021"
 
@@ -25,6 +25,9 @@ open = "5"
 url = "2"
 dirs = "5"
 tauri-plugin-dialog = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSUserDefaults"] }
 
 [features]
 prod = ["tauri/custom-protocol"]

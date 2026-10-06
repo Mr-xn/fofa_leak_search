@@ -7,6 +7,7 @@ import { composeQuery } from './query-normalizer.js';
 import { updateSearchButtonState } from './search.js';
 import { FOFA_RULES } from './fofa-rules.js';
 import { persistWithEviction, evictOldest } from './quota.js';
+import { t } from './i18n/index.js';
 
 // ==================== 存储操作 ====================
 
@@ -35,9 +36,9 @@ function persistFavorites() {
     }
 
     if (result.dropped > 0) {
-        showToast(`本地存储空间不足，已清理 ${result.dropped} 条最旧的收藏`, 'error');
+        showToast(t('本地存储空间不足，已清理 {{n}} 条最旧的收藏', { n: result.dropped }), 'error');
     } else if (!result.ok) {
-        showToast('收藏保存失败：本地存储写入被拒绝', 'error');
+        showToast(t('收藏保存失败：本地存储写入被拒绝'), 'error');
     }
 
     return result;
@@ -327,8 +328,8 @@ function _aggregateTags(favorites) {
     const counts = new Map();
     for (const f of favorites) {
         if (!Array.isArray(f.tags) || f.tags.length === 0) continue;
-        for (const t of f.tags) {
-            counts.set(t, (counts.get(t) || 0) + 1);
+        for (const tag of f.tags) {
+            counts.set(tag, (counts.get(tag) || 0) + 1);
         }
     }
     const builtin = _getBuiltinTags();
@@ -367,7 +368,7 @@ function _renderChips(tags) {
     }
     chipsEl.style.display = '';
 
-    const allChip = `<button class="fav-chip${_activeTag === null ? ' is-active' : ''}" data-tag="">全部</button>`;
+    const allChip = `<button class="fav-chip${_activeTag === null ? ' is-active' : ''}" data-tag="">${t('全部')}</button>`;
     const tagChips = tags.map(({ tag, count }) =>
         `<button class="fav-chip${_activeTag === tag ? ' is-active' : ''}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}<span class="fav-chip-count">${count}</span></button>`
     ).join('');
@@ -379,7 +380,7 @@ function _renderChips(tags) {
     if (actionsEl) {
         actionsEl.style.display = tags.length > 4 ? '' : 'none';
         const toggle = actionsEl.querySelector('.fav-chips-toggle');
-        if (toggle) toggle.textContent = '展开 ▼';
+        if (toggle) toggle.textContent = t('展开 ▼');
     }
 }
 
@@ -392,17 +393,17 @@ function _renderChips(tags) {
 function _renderUserTags(fav, index, builtin) {
     const tags = Array.isArray(fav.tags) ? fav.tags : ['用户'];
     if (tags.length === 0) return '';
-    const chips = tags.map(t => {
+    const chips = tags.map(tag => {
         // 取消标签（从当前用户收藏移除）≠ 删除系统标签本身。
         // 内置标签名（如 unauth / opencms）复用到用户收藏上时，仍应允许单独取消——
         // 这只改本地 fav.tags 数组，绝不触碰 FOFA_RULES。
         // 唯一不可移除的是「用户」标签（addFavorite 强制保留的概念标记）。
-        const canQuickRemove = t !== '用户';
-        return `<span class="fav-tag-chip${canQuickRemove ? ' fav-tag-chip-removable' : ''}" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}${canQuickRemove ? `<button class="fav-tag-chip-remove" data-tag-index="${index}" data-tag="${escapeHtml(t)}" title="从当前规则移除此标签">×</button>` : ''}</span>`;
+        const canQuickRemove = tag !== '用户';
+        return `<span class="fav-tag-chip${canQuickRemove ? ' fav-tag-chip-removable' : ''}" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}${canQuickRemove ? `<button class="fav-tag-chip-remove" data-tag-index="${index}" data-tag="${escapeHtml(tag)}" title="${t('从当前规则移除此标签')}">×</button>` : ''}</span>`;
     }).join('');
     return `<div class="fav-user-tags">
         ${chips}
-        <button class="fav-tag-add" data-tag-index="${index}" title="编辑标签分组">
+        <button class="fav-tag-add" data-tag-index="${index}" title="${t('编辑标签分组')}">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
     </div>`;
@@ -454,20 +455,20 @@ export function renderFavoritesList(filterText) {
         const animClass = i < 12 ? '' : ' fav-item-no-anim';
         if (f.system) {
             const sysTags = Array.isArray(f.tags) && f.tags.length
-                ? `<div class="fav-sys-tags">${f.tags.slice(0, 4).map(t => `<span class="fav-tag-ro">#${escapeHtml(t)}</span>`).join('')}</div>`
+                ? `<div class="fav-sys-tags">${f.tags.slice(0, 4).map(tag => `<span class="fav-tag-ro">#${escapeHtml(tag)}</span>`).join('')}</div>`
                 : '';
             return `
             <div class="fav-item fav-system${animClass}" data-index="${i}"${delay}>
                 <div class="fav-item-main">
                     <div class="fav-sys-head">
-                        <span class="fav-sys-name">${escapeHtml(f.name || '未命名规则')}</span>
-                        <span class="fav-system-badge">内置</span>
+                        <span class="fav-sys-name">${escapeHtml(t(f.name || '未命名规则'))}</span>
+                        <span class="fav-system-badge">${t('内置')}</span>
                     </div>
                     <span class="fav-query" title="${escapeHtml(f.query)}">${escapeHtml(f.query)}</span>
                     ${sysTags}
                 </div>
                 <div class="fav-item-actions">
-                    <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">${_SVG_CHECK}</button>
+                    <button class="btn btn-sm fav-fill" data-index="${i}" title="${t('填充到搜索框')}">${_SVG_CHECK}</button>
                 </div>
             </div>`;
         }
@@ -475,16 +476,16 @@ export function renderFavoritesList(filterText) {
         <div class="fav-item${animClass}" data-index="${i}"${delay}>
             <div class="fav-item-main">
                 <div class="fav-name-row">
-                    <span class="fav-name" data-name-index="${i}" title="点击编辑别名">${escapeHtml(f.name || f.baseQuery)}</span>
-                    <button class="fav-edit-btn" data-edit-index="${i}" title="编辑别名">${_SVG_EDIT}</button>
+                    <span class="fav-name" data-name-index="${i}" title="${t('点击编辑别名')}">${escapeHtml(f.name || f.baseQuery)}</span>
+                    <button class="fav-edit-btn" data-edit-index="${i}" title="${t('编辑别名')}">${_SVG_EDIT}</button>
                 </div>
                 <span class="fav-query" title="${escapeHtml(f.query)}">${escapeHtml(f.query)}</span>
                 ${_renderUserTags(f, i, builtin)}
                 <span class="fav-time">${formatTime(f.time)}</span>
             </div>
             <div class="fav-item-actions">
-                <button class="btn btn-sm fav-fill" data-index="${i}" title="填充到搜索框">${_SVG_CHECK}</button>
-                <button class="btn btn-sm fav-delete" data-index="${i}" title="删除收藏">${_SVG_DELETE}</button>
+                <button class="btn btn-sm fav-fill" data-index="${i}" title="${t('填充到搜索框')}">${_SVG_CHECK}</button>
+                <button class="btn btn-sm fav-delete" data-index="${i}" title="${t('删除收藏')}">${_SVG_DELETE}</button>
             </div>
         </div>`;
     }).join('');
@@ -533,7 +534,7 @@ export function fillFromFavorite(entry) {
         modal.classList.remove('show');
     }
 
-    showToast('已填充收藏的查询条件', 'success');
+    showToast(t('已填充收藏的查询条件'), 'success');
 }
 
 // ==================== 面板控制 ====================
@@ -595,7 +596,7 @@ export function updateFavoriteButtonState() {
     if (baseQuery && !hasFilters && isSystemFavorite(baseQuery)) {
         btn.classList.add('builtin');
         btn.classList.remove('favorited');
-        btn.title = '内置规则，不可取消收藏';
+        btn.title = t('内置规则，不可取消收藏');
         return;
     }
 
@@ -603,10 +604,10 @@ export function updateFavoriteButtonState() {
 
     if (baseQuery && isFavorite(currentQuery)) {
         btn.classList.add('favorited');
-        btn.title = '取消收藏';
+        btn.title = t('取消收藏');
     } else {
         btn.classList.remove('favorited');
-        btn.title = '收藏当前查询条件';
+        btn.title = t('收藏当前查询条件');
     }
 }
 
@@ -631,15 +632,15 @@ export function handleFavoriteClick() {
 
     // 仅纯内置规则（无筛选）不可切换收藏；「内置规则 + 筛选」是独立组合，可收藏
     if (!hasFilters && isSystemFavorite(baseQuery)) {
-        showToast('内置规则，不可取消收藏', 'info');
+        showToast(t('内置规则，不可取消收藏'), 'info');
         return;
     }
 
     const result = toggleFavorite(baseQuery, filtersData, mergedQuery);
     if (result === 'added') {
-        showToast('已收藏当前查询条件', 'success');
+        showToast(t('已收藏当前查询条件'), 'success');
     } else if (result === 'removed') {
-        showToast('已取消收藏', 'info');
+        showToast(t('已取消收藏'), 'info');
     }
     updateFavoriteButtonState();
 }
@@ -651,6 +652,6 @@ export function updateFavCount() {
     const countEl = document.getElementById('favCount');
     const clearBtn = document.getElementById('favClearAllBtn');
     const count = state.favorites.length;
-    if (countEl) countEl.textContent = `${count} 条收藏`;
+    if (countEl) countEl.textContent = t('{{n}} 条收藏', { n: count });
     if (clearBtn) clearBtn.style.display = count > 0 ? '' : 'none';
 }
