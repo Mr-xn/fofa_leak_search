@@ -21,7 +21,7 @@ import { toggleStats, refreshStats, updateStatsButtonState, downloadStatsScreens
 import { toggleFavoritesPanel, closeFavoritesPanel, toggleFavorite, clearAllFavorites, handleClearAllFavorites, renderFavoritesList, fillFromFavorite, removeFavorite, isFavorite, updateFavoriteButtonState, handleFavoriteClick, updateFavCount, seedSystemRules, getRenderedFavorite, setActiveFavTag, isSystemFavorite, updateFavoriteName, updateFavoriteTags, renameCustomTag } from './favorites.js';
 import { autoCheckUpdate, manualCheckUpdate } from './updater.js';
 import { showIconHashModal, closeIconHashModal, fetchIconFromUrl, handleIconFileSelect, copyIconHash, applyIconHashFilter, applyIconHashToQuery } from './icon-hash.js';
-import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, planQueriesAsync, prefetchStepSizes, rateLimitState, resetRateLimitState, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, MAX_RETRIES } from './smart-downloader.js';
+import { getFreeLimit, estimateQuerySize, analyzeDimensions, planQueries, planQueriesAsync, prefetchStepSizes, rateLimitState, resetRateLimitState, executePlan, getVipLevel, getMonthlyQuota, getMonthlyUsed, getRemainingQuota, getMaxDownloadLimit, computePlanOverlap, MAX_RETRIES } from './smart-downloader.js';
 import { SMART_DOWNLOAD_HARD_LIMIT, VIP_LEVEL_MAP } from './config.js';
 import { getSelectedFields } from './ui.js';
 import { setLoggingEnabled, setLogLevel, info as logInfo, warn as logWarn, error as logError } from './logger.js';
@@ -373,15 +373,20 @@ window.startSmartDownload = async () => {
     const overLimitCount = smartPlanSteps.filter(s => s.overLimit).length;
     const deviationCount = smartPlanSteps.filter(s => s.deviation).length;
     const prefetchedCount = smartPlanSteps.filter(s => s.realSize).length;
+    // 步骤重叠校验：各步真实尺寸之和超出查询总量即有重叠（如包含语义的同字段拆分）
+    const overlapCount = computePlanOverlap(smartPlanSteps, stats.size);
     const prefetchHint = t(' · 预查 {{checked}}/{{total}}', { checked: prefetchedCount, total: finalCount });
     const deviationHint = deviationCount > 0 ? t(' · ⚠ {{n}} 步估算偏低', { n: deviationCount }) : '';
     const overLimitHint = overLimitCount > 0 ? t(' · ⚠ {{n}} 步超限', { n: overLimitCount }) : '';
     const failedHint = probeFailedCount > 0 ? t(' · ⚠ {{n}} 步失败', { n: probeFailedCount }) : '';
+    const overlapHint = overlapCount > 0
+        ? t(' · ⚠ 步骤重叠约 {{n}} 条（依赖去重兜底）', { n: overlapCount.toLocaleString() })
+        : '';
     document.getElementById('smartPlanBadge').textContent =
         t('{{count}} 步 · {{total}} 条{{prefetchHint}}{{deviationHint}}{{overLimitHint}}{{failedHint}}', {
             count: finalCount, total: finalTotalStr,
             prefetchHint, deviationHint, overLimitHint, failedHint
-        });
+        }) + overlapHint;
 
     // 超限或预查失败时禁用执行按钮
     const execBtn = document.getElementById('smartExecuteBtn');

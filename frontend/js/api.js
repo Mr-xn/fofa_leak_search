@@ -96,7 +96,29 @@ export async function fetchStats(query, fields, full = false) {
         url += '&full=true';
     }
     const response = await fetchWithTimeout(url);
-    return response.json();
+    const data = await response.json();
+    if (data && data.aggs) {
+        data.aggs = normalizeAggsKeys(data.aggs);
+    }
+    return data;
+}
+
+/** FOFA stats 返回的聚合 key 与查询字段名不一致的别名（如国家返回 countries） */
+const AGGS_KEY_ALIASES = { countries: 'country' };
+
+/**
+ * 归一化聚合 key：FOFA 对部分字段返回复数 key（countries），
+ * 而规划器/展示层都按查询字段名（country）取值，不归一化该维度会被静默丢弃
+ * @param {Object} aggs - FOFA 返回的 aggs 对象
+ * @returns {Object} key 归一化后的 aggs
+ */
+function normalizeAggsKeys(aggs) {
+    const out = {};
+    for (const [key, items] of Object.entries(aggs)) {
+        const canonical = AGGS_KEY_ALIASES[key] || key;
+        out[canonical] = out[canonical] ? out[canonical].concat(items) : items;
+    }
+    return out;
 }
 
 // ==================== 预查探测（用于智能分片预查阶段） ====================

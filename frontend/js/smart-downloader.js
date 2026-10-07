@@ -178,7 +178,13 @@ export async function analyzeDimensions(query) {
 
 /**
  * 将基础查询与条件数组组合为完整 FOFA 查询语句
- * 自动去重：如果 baseQuery 中已包含某字段的条件，不再重复添加
+ *
+ * 叠加规则（2026-09-27 R4 修复）：
+ * - 有正向约束（= / ==）的字段整体锁定：新条件一律跳过（防矛盾，保持原护栏）
+ * - 仅被 != 约束的字段可继续叠加：正向条件用于残差桶二次拆分，
+ *   != 排除链累加（已排除过的值去重）
+ *   —— 原实现把 != 约束也算「字段已用」直接拦截，超限残差永远无法继续切分
+ *
  * @param {string} baseQuery - 基础查询
  * @param {Array<{field: string, op: string, values: string[]}>} conditions - 条件数组
  * @returns {string} 组合后的查询语句
@@ -186,36 +192,94 @@ export async function analyzeDimensions(query) {
 export function buildQuery(baseQuery, conditions) {
     if (!conditions || conditions.length === 0) return baseQuery;
 
-    // 检查 baseQuery 中已存在的字段条件，避免重复
-    // 支持 =、!=、== 三种条件（捕获字段名）
-    const existingFields = new Set();
-    const fieldPattern = /(\w+)(?:!=|==|=)/g;
-    let match;
-    while ((match = fieldPattern.exec(baseQuery)) !== null) {
-        existingFields.add(match[1]);
-    }
+    const { positiveFields, negatedValues } = parseQueryConstraints(baseQuery);
 
     const parts = conditions
-        .filter(({ field }) => !existingFields.has(field))
         .map(({ field, op, values }) => {
-            if (op === '=' && values.length === 1) {
-                return `${field}="${values[0]}"`;
+            // 正向约束字段整体锁定
+            if (positiveFields.has(field)) return null;
+            if (op === '!=') {
+                // 排除链累加：过滤掉已排除过的值（兄弟互斥可能重复注入）
+                const fresh = values.filter(v => !negatedValues.get(field)?.has(v));
+                if (fresh.length === 0) return null;
+                // FOFA 不支持 !(field="A" || field="B") 语法
+                // 正确写法: field!="A" && field!="B"
+                return fresh.map(v => `${field}!="${v}"`).join(' && ');
             }
-            if (op === '=' && values.length > 1) {
+            if (values.length > 1) {
                 const orParts = values.map(v => `${field}="${v}"`);
                 return `(${orParts.join(' || ')})`;
             }
-            if (op === '!=') {
-                // FOFA 不支持 !(field="A" || field="B") 语法
-                // 正确写法: field!="A" && field!="B"
-                return values.map(v => `${field}!="${v}"`).join(' && ');
-            }
-            // Fallback: treat as = with single value
             return `${field}="${values[0]}"`;
-        });
+        })
+        .filter(part => part !== null);
 
     if (parts.length === 0) return baseQuery;
     return `${baseQuery} && ${parts.join(' && ')}`;
+}
+
+/**
+ * 解析查询语句中的字段约束
+ * @param {string} query - FOFA 查询语句
+ * @returns {{positiveFields: Set<string>, negatedValues: Map<string, Set<string>>}}
+ *          positiveFields: 有正向约束（=/==）的字段（整体锁定）；
+ *          negatedValues: 各字段已排除的值
+ */
+function parseQueryConstraints(query) {
+    const positiveFields = new Set();
+    const negatedValues = new Map();
+    const re = /(\w+)\s*(!=|==|=)\s*(?:"([^"]*)"|([^\s()&|]+))/g;
+    let m;
+    while ((m = re.exec(query)) !== null) {
+        const field = m[1];
+        const op = m[2];
+        const value = m[3] !== undefined ? m[3] : m[4];
+        if (op === '!=') {
+            if (!negatedValues.has(field)) negatedValues.set(field, new Set());
+            negatedValues.get(field).add(value);
+        } else {
+            positiveFields.add(field);
+        }
+    }
+    return { positiveFields, negatedValues };
+}
+
+// ==================== 同字段兄弟值互斥 ====================
+
+/**
+ * 同字段兄弟值互斥排除条件
+ *
+ * FOFA field="value" 是包含/模糊语义：server="nginx" 会匹配 "nginx/1.24.0 (Ubuntu)" 的记录。
+ * 同字段多桶正条件拆分时，短值桶会把长值桶的记录全部吞掉（Adminer 案例重复 1,997 条）。
+ *
+ * 规则：值 v 的步骤排除「严格包含 v 的兄弟值 w」（w 是 v 的超串）——这些记录唯一归属 w 的桶。
+ * 方向不可反转：长值桶若排除短值兄弟，会把自己清空（长值记录必然也包含短值）。
+ * 非包含关系的兄弟不排除：排除会把「同时包含两者」的记录从所有桶挤掉，造成丢数据。
+ *
+ * @param {string} field - 字段名
+ * @param {string|Array<string>} value - 本步骤的值（批量 OR 传数组）
+ * @param {Array<string>} allValues - 同拆分面内所有兄弟值
+ * @returns {Array<Object>} 条件数组（buildQuery 的条件对象）
+ */
+function siblingExclusionConditions(field, value, allValues) {
+    const vals = Array.isArray(value) ? value : [value];
+    return allValues
+        .filter(w => !vals.includes(w) && vals.some(v => w.includes(v)))
+        .map(w => ({ field, op: '!=', values: [w] }));
+}
+
+/**
+ * 计划重叠量：预查后各步真实尺寸之和超出查询总量的部分
+ * 超出即说明步骤间有重叠（如包含语义的同字段正条件拆分），提示用户并依赖去重兜底
+ * @param {Array<Object>} steps - 预查后的步骤（只计有 realSize 的）
+ * @param {number} totalSize - 查询匹配总量
+ * @returns {number} 重叠条数（0 = 无重叠）
+ */
+export function computePlanOverlap(steps, totalSize) {
+    const realSum = steps.reduce(
+        (s, st) => s + (typeof st.realSize === 'number' ? st.realSize : 0), 0
+    );
+    return Math.max(0, realSum - (totalSize || 0));
 }
 
 // ==================== 查询规划 ====================
@@ -697,7 +761,10 @@ function cartesianRecursive(query, estSize, candidates, depth, freeLimit, outSte
 
     for (const bucket of dim.buckets) {
         const subEstSize = Math.ceil(estSize * bucket.ratio);
-        const subQuery = buildQuery(query, [{ field: dim.field, op: '=', values: [bucket.name] }]);
+        const subQuery = buildQuery(query, [
+            { field: dim.field, op: '=', values: [bucket.name] },
+            ...siblingExclusionConditions(dim.field, bucket.name, dim.buckets.map(b => b.name))
+        ]);
         const subTrail = [...condTrail, `${dim.field}=${bucket.name}`];
 
         covered += cartesianRecursive(
@@ -815,11 +882,14 @@ async function fetchStatsForProbe(query, isFirstCall = false) {
 }
 
 /**
- * 二分拆分超限步骤：用笛卡尔积下一个未用维度切分
+ * 二分拆分超限步骤：用下一个可用维度切分
  *
- * 策略：从 step.query 解析已用字段，选一个未用、桶数≥2、top 桶占比<90% 的维度，
- * 按 top-5 桶切分。每个子桶递归预查，仍超限则继续用下一个维度切。
- * 最后用 != 兜底"其他"部分。
+ * 策略（2026-09-27 R4 修复）：
+ * - 正向约束字段不可复用；仅被 != 约束的字段可继续切分（残差桶场景）
+ * - 候选桶先过滤掉查询已排除的值（那些桶必为空）
+ * - 已知桶被排除值清空时，重探残差自身的子分布再切（而非直接放弃）
+ * - 按 top-5 桶切分，每个子桶递归预查，仍超限则继续用下一个维度切
+ * - 最后用 != 兜底"其他"部分
  *
  * @param {Object} step - 待拆分步骤（query + estimatedSize + description）
  * @param {number} realSize - 真实匹配数（来自预查）
@@ -834,30 +904,42 @@ async function bisectOverLimitStep(step, realSize, maxsize, originalStats, depth
         return null;
     }
 
-    // 从 query 解析已用字段（支持 =、!=、== 三种条件）
-    const usedFields = new Set();
-    const fieldPattern = /(\w+)\s*(?:!=|==|=)/g;
-    let m;
-    while ((m = fieldPattern.exec(step.query)) !== null) {
-        usedFields.add(m[1]);
-    }
+    const { positiveFields, negatedValues } = parseQueryConstraints(step.query);
 
-    // 候选维度：未用、桶数≥2、top 桶占比<90%（避免再选单桶占 90%+ 的）
-    const candidates = PLANNABLE_FIELDS
-        .filter(f => !usedFields.has(f))
+    // 候选维度：无正向约束、可用桶数≥2、top 桶占比<90%（避免再选单桶占 90%+ 的）
+    // 可用桶 = 已知桶中未被查询 != 排除的值（被排除的桶必为空，切了也是废步骤）
+    const makeCandidates = (aggs, totalSize) => PLANNABLE_FIELDS
+        .filter(f => !positiveFields.has(f))
         .map(f => {
-            const buckets = originalStats.aggs?.[f] || [];
+            const excluded = negatedValues.get(f) || new Set();
+            const buckets = (aggs?.[f] || []).filter(b => !excluded.has(b.name));
             const topRatio = buckets.length > 0
-                ? Math.max(...buckets.map(b => b.count / originalStats.size))
+                ? Math.max(...buckets.map(b => b.count / totalSize))
                 : 1;
             return { field: f, buckets, topRatio };
         })
         .filter(c => c.buckets.length >= 2 && c.topRatio < 0.9)
         .sort((a, b) => a.topRatio - b.topRatio);
 
+    let candidates = makeCandidates(originalStats.aggs, originalStats.size);
+
+    // 已知桶被排除值清空，但仍有可复用字段（仅 != 约束）→ 重探残差自身的子分布
+    // 例如 port!=top5 的残差：原始 top-5 端口已全被排除，需要查它自己的 top 端口
+    if (candidates.length === 0 && PLANNABLE_FIELDS.some(f => !positiveFields.has(f))) {
+        const subStats = await fetchStatsForProbe(step.query);
+        if (subStats?.aggs) {
+            candidates = makeCandidates(subStats.aggs, subStats.size || originalStats.size);
+            if (candidates.length > 0) {
+                logInfo('smartdl', '二分重探残差子分布成功', {
+                    query: step.query, field: candidates[0].field
+                });
+            }
+        }
+    }
+
     if (candidates.length === 0) {
         logWarn('smartdl', '二分拆分无可用维度', {
-            query: step.query, usedFields: [...usedFields]
+            query: step.query, positiveFields: [...positiveFields]
         });
         return null;
     }
@@ -868,7 +950,8 @@ async function bisectOverLimitStep(step, realSize, maxsize, originalStats, depth
 
     for (const bucket of nextDim.buckets) {
         const subQuery = buildQuery(step.query, [
-            { field: nextDim.field, op: '=', values: [bucket.name] }
+            { field: nextDim.field, op: '=', values: [bucket.name] },
+            ...siblingExclusionConditions(nextDim.field, bucket.name, nextDim.buckets.map(b => b.name))
         ]);
 
         const subProbe = await fetchSearchSizeForProbe(subQuery);
@@ -967,6 +1050,7 @@ export async function prefetchStepSizes(steps, maxsize, originalStats, onProgres
     let deviations = 0;
     let splits = 0;
     let failed = 0;
+    let empty = 0;
     const total = steps.length;
 
     for (let i = 0; i < steps.length; i++) {
@@ -975,12 +1059,22 @@ export async function prefetchStepSizes(steps, maxsize, originalStats, onProgres
 
         const probeResult = await fetchSearchSizeForProbe(step.query);
 
-        if (!probeResult || probeResult.error || !probeResult.size) {
+        if (!probeResult || probeResult.error) {
             // 预查失败：保留原步骤 + 标记
             step.prefetchFailed = true;
             step.description = `${step.description} ${t('⚠ 预查失败')}`;
             result.push(step);
             failed++;
+        } else if (probeResult.size === 0) {
+            // 空步骤：查询成功但真实匹配 0 条（如 org=OVH 在 asn 排除后已无数据）。
+            // 不是失败——移出执行计划（status=skipped），0 条也不计入总量。
+            step.empty = true;
+            step.status = 'skipped';
+            step.realSize = 0;
+            step.estimatedSize = 0;
+            step.description = `${step.description} ${t('✓ 0 条（空步骤）')}`;
+            result.push(step);
+            empty++;
         } else {
             const realSize = probeResult.size;
             step.realSize = realSize;
@@ -1006,8 +1100,11 @@ export async function prefetchStepSizes(steps, maxsize, originalStats, onProgres
                     result.push(...subSteps);
                     splits++;
                 } else {
-                    // 二分失败，保留原步骤标记超限
+                    // 二分失败，保留原步骤标记超限。
+                    // estimatedSize 同步真实值：否则 UI 总量/步骤计数仍显示拆分前的陈旧估算
+                    // （Adminer 案例显示 4,570 而真实 10,287）
                     step.overLimit = true;
+                    step.estimatedSize = realSize;
                     const realSizeStr = realSize.toLocaleString();
                     step.description = `${step.description} ${t('⚠ 真实超限 {{size}}，二分失败', { size: realSizeStr })}`;
                     result.push(step);
@@ -1020,14 +1117,14 @@ export async function prefetchStepSizes(steps, maxsize, originalStats, onProgres
         }
 
         if (onProgress) {
-            onProgress({ checked, total, deviations, splits, failed });
+            onProgress({ checked, total, deviations, splits, failed, empty });
         }
     }
 
     reassignStepIds(result);
 
     logInfo('smartdl', '预查阶段完成', {
-        total, deviations, splits, failed,
+        total, deviations, splits, failed, empty,
         outputSteps: result.length
     });
 
@@ -1136,7 +1233,10 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
                 j++;
             }
 
-            const query = buildQuery(baseQuery, [{ field, op: '=', values: batch }]);
+            const query = buildQuery(baseQuery, [
+                { field, op: '=', values: batch },
+                ...siblingExclusionConditions(field, batch, aggs.map(a => a.name))
+            ]);
             steps.push({
                 id: stepId++,
                 query,
@@ -1167,7 +1267,11 @@ function trySplitByField(baseQuery, stats, field, aggs, freeLimit) {
             } else {
                 // 关键修复：不静默丢弃，产出 needsProbe 占位步骤
                 // 不计入 coveredCount，让"其他"逻辑知道这部分还未真正规划
-                const query = buildQuery(baseQuery, [{ field, op: '=', values: [entry.name] }]);
+                // 兄弟值排除同样加上：探测/二分产出的子步骤继承此 query，需与兄弟桶互斥
+                const query = buildQuery(baseQuery, [
+                    { field, op: '=', values: [entry.name] },
+                    ...siblingExclusionConditions(field, entry.name, aggs.map(a => a.name))
+                ]);
                 const ratioStr = (bucketRatio * 100).toFixed(1);
                 const probeReason = needsProbeByRatio
                     ? t('超大桶占比 {{ratio}}%，比例估算不可信', { ratio: ratioStr })
@@ -1263,7 +1367,10 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
 
         const query = buildQuery(baseQuery, [
             { field: primaryField, op: '=', values: [entry.name] },
-            { field: secondaryField, op: '=', values: [subEntry.name] }
+            // 主/次维度都做兄弟值互斥：包含语义下短值会吞长值记录
+            ...siblingExclusionConditions(primaryField, entry.name, (stats.aggs?.[primaryField] || []).map(a => a.name)),
+            { field: secondaryField, op: '=', values: [subEntry.name] },
+            ...siblingExclusionConditions(secondaryField, subEntry.name, subAggs.map(a => a.name))
         ]);
         steps.push({
             id: 0,
@@ -1281,6 +1388,7 @@ function trySubSplit(baseQuery, primaryField, entry, stats, freeLimit) {
     if (remaining > 0 && remaining <= freeLimit && usedValues.length > 0) {
         const query = buildQuery(baseQuery, [
             { field: primaryField, op: '=', values: [entry.name] },
+            ...siblingExclusionConditions(primaryField, entry.name, (stats.aggs?.[primaryField] || []).map(a => a.name)),
             { field: secondaryField, op: '!=', values: usedValues }
         ]);
         const remainingStr = remaining.toLocaleString();

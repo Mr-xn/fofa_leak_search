@@ -43,6 +43,7 @@ export default {
     ' · ⚠ {{n}} 步估算偏低': ' · ⚠ {{n}} steps underestimated',
     ' · ⚠ {{n}} 步超限': ' · ⚠ {{n}} steps over limit',
     ' · ⚠ {{n}} 步失败': ' · ⚠ {{n}} steps failed',
+    ' · ⚠ 步骤重叠约 {{n}} 条（依赖去重兜底）': ' · ⚠ ~{{n}} overlapping results across steps (dedup will handle)',
     '{{count}} 步 · {{total}} 条{{prefetchHint}}{{deviationHint}}{{overLimitHint}}{{failedHint}}': '{{count}} steps · {{total}} results{{prefetchHint}}{{deviationHint}}{{overLimitHint}}{{failedHint}}',
     '存在超限/失败步骤': 'Some steps over limit or failed',
     '{{n}} 个步骤有问题，执行会触发 FOFA 限制或扣 F 点。请查看诊断日志': '{{n}} steps have problems; running them will trigger FOFA limits or consume F points. Check the diagnostic logs',

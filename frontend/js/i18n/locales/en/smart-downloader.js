@@ -15,6 +15,7 @@ export default {
     '预查 {{size}}': 'prefetch {{size}}',
     '⚠ 仍超限': '⚠ Still over limit',
     '⚠ 预查失败': '⚠ Prefetch failed',
+    '✓ 0 条（空步骤）': '✓ 0 results (empty step)',
     '⚠ 真实超限 {{size}}，二分失败': '⚠ Actual size {{size}} over the limit, split failed',
     '(达到探测深度上限，可能超限)': '(Probe depth limit reached, may exceed the limit)',
     '超大桶占比 {{ratio}}%，比例估算不可信': 'Oversized bucket is {{ratio}}% of the total, ratio estimate unreliable',
