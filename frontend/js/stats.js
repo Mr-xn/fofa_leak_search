@@ -4,11 +4,22 @@ import { state } from './config.js';
 import { fetchStats } from './api.js';
 import { formatNumber, escapeHtml, showToast } from './utils.js';
 import { downloadNodeScreenshot } from './screenshot.js';
-import { error as logError } from './logger.js';
+import { error as logError, warn as logWarn } from './logger.js';
 import { t } from './i18n/index.js';
 
 // 统计聚合支持的字段
-export const STATS_FIELDS = ['protocol', 'port', 'country', 'domain', 'os', 'server', 'org', 'asn', 'asset_type', 'title', 'fid', 'icp'];
+// 注意：不含 fid——FOFA 对非企业会员拒绝 fid 聚合（[820027]），且是整条请求报废而非单字段降级
+export const STATS_FIELDS = ['protocol', 'port', 'country', 'domain', 'os', 'server', 'org', 'asn', 'asset_type', 'title', 'icp'];
+
+/**
+ * 从 FOFA 820027 错误信息中提取被拒绝的聚合字段名
+ * @param {string} errmsg - FOFA 返回的 errmsg，如 "[820027] 不支持的聚合字段: fid"
+ * @returns {string|null} 被拒绝的字段名；无法识别时返回 null
+ */
+export function extractRejectedAggField(errmsg) {
+    const m = /不支持的聚合字段:\s*(\S+)/.exec(errmsg || '');
+    return m ? m[1] : null;
+}
 
 // 统计缓存: Map<queryKey, { data, timestamp }>
 const statsCache = new Map();
@@ -64,7 +75,18 @@ export async function loadStats() {
 
     try {
         // 数据范围跟随结果页（state.searchFull），FOFA stats 默认只统计近一年
-        const data = await fetchStats(state.currentQuery, STATS_FIELDS.join(','), state.searchFull || false);
+        let data = await fetchStats(state.currentQuery, STATS_FIELDS.join(','), state.searchFull || false);
+
+        // FOFA 可能按账号等级拒绝个别聚合字段（820027），剔除该字段重试一次，
+        // 避免单个字段毒化整条请求导致统计面板整体不可用
+        if (data.error) {
+            const rejected = extractRejectedAggField(data.errmsg);
+            if (rejected) {
+                const fields = STATS_FIELDS.filter(f => f !== rejected);
+                logWarn('stats', 'FOFA 拒绝聚合字段，剔除后重试', { field: rejected, fields: fields.join(',') });
+                data = await fetchStats(state.currentQuery, fields.join(','), state.searchFull || false);
+            }
+        }
 
         if (data.error) {
             statsContent.innerHTML = `<div class="stats-error">${escapeHtml(t('加载失败: {{message}}', { message: data.errmsg }))}</div>`;
